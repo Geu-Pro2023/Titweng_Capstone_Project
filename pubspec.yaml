@@ -1,0 +1,52 @@
+name: titweng
+description: "Biometric Cattle Verification System for South Sudan"
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.2
+  smooth_page_indicator: ^1.1.0
+  flutter_animate: ^4.1.1+1
+  intl_phone_field: ^3.1.0
+
+  image_picker: ^1.0.4
+  permission_handler: ^11.0.1
+  
+  # Firebase
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  google_sign_in: ^6.2.1
+  cloud_firestore: ^5.4.3
+  crypto: ^3.0.3
+  
+  # Database and HTTP
+  postgres: ^2.6.2
+  http: ^1.1.0
+  
+  # PDF and Email
+  pdf: ^3.10.4
+  mailer: ^6.0.1
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+
+  
+  assets:
+    - assets/images/
+    - assets/images/onboarding/
+    - assets/images/cattle/
+    - assets/icons/

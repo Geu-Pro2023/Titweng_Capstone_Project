@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "833225352309",
+    "project_id": "titweng-cattle-recognition",
+    "storage_bucket": "titweng-cattle-recognition.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:833225352309:android:92920114ff3bd50772c43c",
+        "android_client_info": {
+          "package_name": "com.titweng.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "833225352309-08orsjgdha3vtrh4hdpi06u7g8vii70n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.titweng.mobile",
+            "certificate_hash": "6a5989c68b9a3003756ddd7939c9b66131bc6e91"
+          }
+        },
+        {
+          "client_id": "833225352309-dljuh747sm5lfic5dv0evuq3sedp8u9u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2TofIt6mjF_XMHTx1EIB9QHdoE-sGiqM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "833225352309-dljuh747sm5lfic5dv0evuq3sedp8u9u.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "833225352309-7v0ts06qplu65i5sqmlmaasf56lhm9bu.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "titweng-cattle-recognition"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
