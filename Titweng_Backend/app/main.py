@@ -359,10 +359,19 @@ async def lifespan(app: FastAPI):
     # Create database tables
     try:
         from app.database import Base, engine
+        
+        # First, create pgvector extension
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            conn.commit()
+            print("pgvector extension created/verified")
+        
+        # Then create all tables
         Base.metadata.create_all(bind=engine)
         print("Database tables created successfully")
     except Exception as e:
         print(f"Error creating tables: {e}")
+        raise e  # Fail fast if database setup fails
     
     # Create admin user if not exists
     try:
