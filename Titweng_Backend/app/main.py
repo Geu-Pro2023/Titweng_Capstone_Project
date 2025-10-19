@@ -589,7 +589,170 @@ def get_all_cows(db: Session = Depends(get_db)):
         })
     return {"total_cows": len(result), "cows": result}
 
-@app.get("/download-receipt/{cow_tag}", tags=["Cattle Management"])
+# -------- Admin Dashboard --------
+@app.get("/admin/dashboard", tags=["Admin Dashboard"])
+def admin_dashboard(db: Session = Depends(get_db)):
+    """Admin dashboard statistics"""
+    total_cows = db.query(Cow).count()
+    total_owners = db.query(Owner).count()
+    pending_reports = db.query(Report).filter(Report.status == "pending").count()
+    return {"total_cows": total_cows, "total_owners": total_owners, "pending_reports": pending_reports}
+
+@app.get("/admin/reports", tags=["Admin Dashboard"])
+def get_reports(db: Session = Depends(get_db)):
+    """Get all reports for admin review"""
+    reports = db.query(Report).order_by(Report.created_at.desc()).all()
+    return [{"report_id": r.report_id, "description": r.description, "location": r.location,
+             "status": r.status, "created_at": r.created_at} for r in reports]
+
+@app.get("/admin/cows", tags=["Admin Dashboard"])
+def get_all_cows_admin(db: Session = Depends(get_db)):
+    """Admin view of all registered cows with detailed info"""
+    cows = db.query(Cow).all()
+    result = []
+    for cow in cows:
+        owner = cow.owner
+        result.append({
+            "cow_id": cow.cow_id,
+            "cow_tag": cow.cow_tag,
+            "breed": cow.breed,
+            "color": cow.color,
+            "age": cow.age,
+            "registration_date": cow.registration_date.strftime('%d/%m/%Y %H:%M') if cow.registration_date else "Unknown",
+            "owner_name": owner.full_name if owner else "Unknown",
+            "owner_email": owner.email if owner else "Unknown",
+            "owner_phone": owner.phone if owner else "Unknown",
+            "owner_address": owner.address if owner else "Unknown",
+            "embeddings_count": len(cow.embeddings)
+        })
+    return {"total_cows": len(result), "cows": result}
+
+@app.put("/admin/cows/{cow_id}", tags=["Admin Dashboard"])
+def update_cow(
+    cow_id: int,
+    owner_name: str = Form(None),
+    owner_email: str = Form(None),
+    owner_phone: str = Form(None),
+    owner_address: str = Form(None),
+    national_id: str = Form(None),
+    breed: str = Form(None),
+    color: str = Form(None),
+    age: int = Form(None),
+    db: Session = Depends(get_db)
+):
+    """Update cow and owner information"""
+    cow = db.query(Cow).filter(Cow.cow_id == cow_id).first()
+    if not cow:
+        raise HTTPException(status_code=404, detail="Cow not found")
+    
+    # Update cow details
+    if breed is not None:
+        cow.breed = breed
+    if color is not None:
+        cow.color = color
+    if age is not None:
+        cow.age = age
+    
+    # Update owner details
+    if cow.owner and any([owner_name, owner_email, owner_phone, owner_address, national_id]):
+        if owner_name is not None:
+            cow.owner.full_name = owner_name
+        if owner_email is not None:
+            cow.owner.email = owner_email
+        if owner_phone is not None:
+            cow.owner.phone = owner_phone
+        if owner_address is not None:
+            cow.owner.address = owner_address
+        if national_id is not None:
+            cow.owner.national_id = national_id
+    
+    db.commit()
+    return {
+        "success": True,
+        "message": f"Cow {cow.cow_tag} updated successfully",
+        "cow_id": cow.cow_id,
+        "cow_tag": cow.cow_tag
+    }
+
+@app.delete("/admin/cows/{cow_id}", tags=["Admin Dashboard"])
+def delete_cow(
+    cow_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete cow and all associated data"""
+    cow = db.query(Cow).filter(Cow.cow_id == cow_id).first()
+    if not cow:
+        raise HTTPException(status_code=404, detail="Cow not found")
+    
+    cow_tag = cow.cow_tag
+    owner_name = cow.owner.full_name if cow.owner else "Unknown"
+    
+    # Delete associated files
+    try:
+        if cow.receipt_pdf_link and os.path.exists(cow.receipt_pdf_link):
+            os.remove(cow.receipt_pdf_link)
+        
+        # Delete cow images from filesystem
+        for embedding in cow.embeddings:
+            if embedding.image_path:
+                image_path = os.path.join("static/cow_images", embedding.image_path)
+                if os.path.exists(image_path):
+                    os.remove(image_path)
+    except Exception as e:
+        print(f"File cleanup warning: {e}")
+    
+    # Delete verification logs first (foreign key constraint)
+    db.query(VerificationLog).filter(VerificationLog.cow_id == cow_id).delete()
+    
+    # Database will cascade delete embeddings
+    db.delete(cow)
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Cow {cow_tag} (Owner: {owner_name}) deleted successfully",
+        "deleted_cow_tag": cow_tag
+    }
+
+# -------- Mobile App --------
+@app.post("/submit-report", tags=["Mobile App"])
+async def submit_report(
+    description: str = Form(...),
+    location: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    """Submit a report from mobile app"""
+    report = Report(user_id=1, description=description, location=location)  # Dummy user ID
+    db.add(report)
+    db.commit()
+    return {"success": True, "message": "Report submitted successfully"}
+
+@app.get("/preview-next-cow-tag", tags=["Admin Dashboard"])
+def preview_next_cow_tag(db: Session = Depends(get_db)):
+    """Preview what the next cow tag will be"""
+    next_tag = generate_next_cow_tag(db)
+    total_cows = db.query(Cow).count()
+    return {
+        "next_cow_tag": next_tag,
+        "explanation": "This tag will be automatically generated during registration",
+        "current_total_cows": total_cows,
+        "note": "cow_id and cow_tag are auto-generated for security"
+    }
+
+@app.get("/image/{embedding_id}", tags=["Utility"])
+def get_image(embedding_id: int, db: Session = Depends(get_db)):
+    """Get image from database by embedding ID"""
+    embedding = db.query(Embedding).filter(Embedding.embedding_id == embedding_id).first()
+    if not embedding or not embedding.image_data:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    return Response(
+        content=embedding.image_data,
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f"inline; filename={embedding.image_path}"}
+    )
+
+@app.get("/download-receipt/{cow_tag}", tags=["Utility"])
 def download_receipt(cow_tag: str, db: Session = Depends(get_db)):
     """Download PDF receipt for a registered cow"""
     cow = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
