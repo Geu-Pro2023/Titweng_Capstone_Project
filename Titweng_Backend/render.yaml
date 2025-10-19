@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: titweng-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@titweng.com
+
+databases:
+  - name: titweng-db
+    databaseName: titweng
+    user: titweng_user

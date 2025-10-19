@@ -1,0 +1,2 @@
+Titweng_Backend/ml_models/siamese/*.pth filter=lfs diff=lfs merge=lfs -text
+Titweng_Backend/ml_models/yolov8/*.pt filter=lfs diff=lfs merge=lfs -text
