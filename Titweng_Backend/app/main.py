@@ -224,8 +224,10 @@ def send_email_with_receipt(owner_email: str, owner_name: str, cow_tag: str, pdf
         smtp_password = os.getenv("SMTP_PASSWORD")
         
         if not all([smtp_server, smtp_username, smtp_password]):
-            print("Email not configured")
+            print("Email configuration missing")
             return
+        
+        print(f"Attempting to send email to {owner_email} using {smtp_username}")
         
         msg = MIMEMultipart()
         msg['From'] = smtp_username
@@ -233,11 +235,11 @@ def send_email_with_receipt(owner_email: str, owner_name: str, cow_tag: str, pdf
         msg['Subject'] = f"Cattle Registration Confirmation - {cow_tag}"
         
         body = f"""Dear {owner_name},
-        
+
 Your cattle has been successfully registered with tag: {cow_tag}
-        
+
 Please find your registration receipt attached.
-        
+
 Best regards,
 Titweng Cattle Recognition System"""
         
@@ -250,16 +252,17 @@ Titweng Cattle Recognition System"""
         part.add_header('Content-Disposition', f'attachment; filename="{cow_tag}_receipt.pdf"')
         msg.attach(part)
         
-        # Send email
+        # Send email with better error handling
         server = smtplib.SMTP(smtp_server, smtp_port)
         server.starttls()
         server.login(smtp_username, smtp_password)
         server.send_message(msg)
         server.quit()
         
-        print(f"Email sent to {owner_email}")
+        print(f"Email successfully sent to {owner_email}")
     except Exception as e:
-        print(f"Email failed: {e}")
+        print(f"Email failed: {str(e)}")
+        print(f"SMTP Config: {os.getenv('SMTP_SERVER')}:{os.getenv('SMTP_PORT')} User: {os.getenv('SMTP_USERNAME')}")
 
 def generate_next_cow_tag(db: Session) -> str:
     """Generate secure cow tag with random component"""
@@ -449,8 +452,11 @@ async def register_cow(
         db.commit()
         
         # Send notifications
-        send_sms(owner_phone, f"Your cow {cow_tag} has been registered successfully!")
-        send_email_with_receipt(owner_email, owner_name, cow_tag, pdf_receipt)
+        try:
+            send_sms(owner_phone, f"Your cow {cow_tag} has been registered successfully!")
+            send_email_with_receipt(owner_email, owner_name, cow_tag, pdf_receipt)
+        except Exception as e:
+            print(f"Notification error: {e}")
         
         return {
             "success": True, 
@@ -542,7 +548,7 @@ async def verify_cow(
             # Log verification
             verification_log = VerificationLog(
                 cow_id=best_match.cow_id,
-                similarity_score=best_score,
+                similarity_score=float(best_score),  # Convert numpy.float32 to Python float
                 verified=True,
                 user_id=1
             )
@@ -577,7 +583,7 @@ async def verify_cow(
         else:
             # Log failed verification
             verification_log = VerificationLog(
-                similarity_score=best_score,
+                similarity_score=float(best_score),  # Convert numpy.float32 to Python float
                 verified=False,
                 user_id=1
             )
