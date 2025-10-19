@@ -355,6 +355,27 @@ async def lifespan(app: FastAPI):
     global siamese_model
     os.makedirs("static", exist_ok=True)
     siamese_model = load_siamese_model()
+    
+    # Create admin user if not exists
+    try:
+        db = SessionLocal()
+        admin_user = db.query(User).filter(User.username == "admin").first()
+        if not admin_user:
+            admin_user = User(
+                username="admin",
+                email="admin@example.com",
+                password_hash=hash_password("admin123"),
+                role="admin"
+            )
+            db.add(admin_user)
+            db.commit()
+            print("Admin user created successfully")
+        else:
+            print("Admin user already exists")
+        db.close()
+    except Exception as e:
+        print(f"Error creating admin user: {e}")
+    
     yield
     print("Shutting down...")
 
