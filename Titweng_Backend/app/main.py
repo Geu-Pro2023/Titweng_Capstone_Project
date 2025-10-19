@@ -360,6 +360,9 @@ async def lifespan(app: FastAPI):
     try:
         from app.database import Base, engine
         
+        # Debug: Print connection info
+        print(f"Connecting to database: {engine.url}")
+        
         # First, create pgvector extension
         with engine.connect() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
@@ -369,6 +372,13 @@ async def lifespan(app: FastAPI):
         # Then create all tables
         Base.metadata.create_all(bind=engine)
         print("Database tables created successfully")
+        
+        # Verify tables exist
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public';"))
+            tables = [row[0] for row in result]
+            print(f"Tables in database: {tables}")
+            
     except Exception as e:
         print(f"Error creating tables: {e}")
         raise e  # Fail fast if database setup fails
