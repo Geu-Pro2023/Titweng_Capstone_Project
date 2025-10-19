@@ -9,9 +9,9 @@ python-jose[cryptography]==3.3.0
 python-dotenv==1.0.0
 twilio==8.10.0
 reportlab==4.0.7
+numpy<2.0.0
 opencv-python-headless==4.8.1.78
 Pillow
 torch --index-url https://download.pytorch.org/whl/cpu
 torchvision --index-url https://download.pytorch.org/whl/cpu
-numpy
 qrcode[pil]==7.4.2
