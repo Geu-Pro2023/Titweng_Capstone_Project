@@ -360,8 +360,9 @@ async def lifespan(app: FastAPI):
     try:
         from app.database import Base, engine
         
-        # Debug: Print connection info
-        print(f"Connecting to database: {engine.url}")
+        # Debug: Print connection info (hide password)
+        db_url_safe = str(engine.url).replace(engine.url.password or '', '***')
+        print(f"Connecting to database: {db_url_safe}")
         
         # First, create pgvector extension
         with engine.connect() as conn:
@@ -373,11 +374,12 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         print("Database tables created successfully")
         
-        # Verify tables exist
+        # Verify tables exist and commit
         with engine.connect() as conn:
             result = conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public';"))
             tables = [row[0] for row in result]
             print(f"Tables in database: {tables}")
+            conn.commit()  # Ensure tables are committed
             
     except Exception as e:
         print(f"Error creating tables: {e}")
@@ -385,6 +387,7 @@ async def lifespan(app: FastAPI):
     
     # Create admin user if not exists
     try:
+        print("Creating admin user...")
         db = SessionLocal()
         admin_username = os.getenv("ADMIN_USERNAME", "admin")[:50]  # Truncate username
         admin_user = db.query(User).filter(User.username == admin_username).first()
