@@ -46,7 +46,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password[:72])  # Truncate to 72 bytes for bcrypt
+    return pwd_context.hash(password[:72])
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -385,28 +385,8 @@ async def lifespan(app: FastAPI):
         print(f"Error creating tables: {e}")
         raise e  # Fail fast if database setup fails
     
-    # Create admin user if not exists
-    try:
-        print("Creating admin user...")
-        db = SessionLocal()
-        admin_username = os.getenv("ADMIN_USERNAME", "admin")[:50]  # Truncate username
-        admin_user = db.query(User).filter(User.username == admin_username).first()
-        if not admin_user:
-            admin_password = os.getenv("ADMIN_PASSWORD", "admin123")[:72]  # Truncate password
-            admin_user = User(
-                username=admin_username,
-                email=os.getenv("ADMIN_EMAIL", "admin@example.com"),
-                password_hash=hash_password(admin_password),
-                role="admin"
-            )
-            db.add(admin_user)
-            db.commit()
-            print("Admin user created successfully")
-        else:
-            print("Admin user already exists")
-        db.close()
-    except Exception as e:
-        print(f"Error creating admin user: {e}")
+    # Skip automatic admin user creation - create manually via database
+    print("Skipping automatic admin user creation - create manually if needed")
     
     yield
     print("Shutting down...")
