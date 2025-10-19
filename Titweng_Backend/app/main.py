@@ -330,7 +330,8 @@ app.add_middleware(
 def root():
     return {"message": "Titweng Cattle Recognition API - No Authentication Required", "status": "live"}
 
-@app.post("/register-cow", tags=["Cattle Management"])
+# -------- Admin Dashboard --------
+@app.post("/register-cow", tags=["Admin Dashboard"])
 async def register_cow(
     owner_name: str = Form(...),
     owner_email: str = Form(...),
@@ -441,7 +442,8 @@ async def register_cow(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
-@app.post("/verify-cow", tags=["Cattle Management"])
+# -------- Mobile & Admin Verification --------
+@app.post("/verify-cow", tags=["Mobile App", "Admin Dashboard"])
 async def verify_cow(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
@@ -570,26 +572,8 @@ async def verify_cow(
 def health_check():
     return {"status": "healthy", "model_loaded": siamese_model is not None, "auth": "disabled"}
 
-@app.get("/cows", tags=["Cattle Management"])
-def get_all_cows(db: Session = Depends(get_db)):
-    """View all registered cows"""
-    cows = db.query(Cow).all()
-    result = []
-    for cow in cows:
-        owner = cow.owner
-        result.append({
-            "cow_id": cow.cow_id,
-            "cow_tag": cow.cow_tag,
-            "breed": cow.breed,
-            "color": cow.color,
-            "age": cow.age,
-            "owner_name": owner.full_name if owner else "Unknown",
-            "owner_email": owner.email if owner else "Unknown",
-            "embeddings_count": len(cow.embeddings)
-        })
-    return {"total_cows": len(result), "cows": result}
 
-# -------- Admin Dashboard --------
+
 @app.get("/admin/dashboard", tags=["Admin Dashboard"])
 def admin_dashboard(db: Session = Depends(get_db)):
     """Admin dashboard statistics"""
@@ -606,8 +590,8 @@ def get_reports(db: Session = Depends(get_db)):
              "status": r.status, "created_at": r.created_at} for r in reports]
 
 @app.get("/admin/cows", tags=["Admin Dashboard"])
-def get_all_cows_admin(db: Session = Depends(get_db)):
-    """Admin view of all registered cows with detailed info"""
+def get_all_cows(db: Session = Depends(get_db)):
+    """View all registered cows with owner details"""
     cows = db.query(Cow).all()
     result = []
     for cow in cows:
