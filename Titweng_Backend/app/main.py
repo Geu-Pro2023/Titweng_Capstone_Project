@@ -372,48 +372,48 @@ async def register_cow(
         cow_age = None
         if age and age.isdigit():
             cow_age = int(age)
-    
-    # Create or get owner
-    owner = db.query(Owner).filter(Owner.email == owner_email).first()
-    if not owner:
-        owner = Owner(full_name=owner_name, email=owner_email, phone=owner_phone, address=owner_address, national_id=national_id)
-        db.add(owner)
-        db.commit()
-        db.refresh(owner)
-    
-    embeddings_list = []
-    
-    # Create directory for cow images
-    os.makedirs("static/cow_images", exist_ok=True)
-    
-    for i, f in enumerate(files[:5]):
-        contents = await f.read()
-        nparr = np.frombuffer(contents, np.uint8)
-        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if image is None:
-            continue
-        nose = detect_nose(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        if nose is None:
-            continue
-        try:
-            tensor = preprocess_image(nose)
-            emb = extract_embedding(tensor)
-            
-            # Convert image to bytes for database storage
-            _, buffer = cv2.imencode('.jpg', image)
-            image_bytes = buffer.tobytes()
-            
-            embeddings_list.append((emb, image_bytes))
-        except ValueError as e:
-            print(f"Skipping poor quality image: {e}")
-            continue
-    
-    if len(embeddings_list) < 1:  # Reduce requirement for testing
-        raise HTTPException(status_code=400, detail="Need at least 1 high-quality image for registration")
-    
-    print(f"Processed {len(embeddings_list)} embeddings successfully")
-    
-    try:
+        
+        # Create or get owner
+        owner = db.query(Owner).filter(Owner.email == owner_email).first()
+        if not owner:
+            owner = Owner(full_name=owner_name, email=owner_email, phone=owner_phone, address=owner_address, national_id=national_id)
+            db.add(owner)
+            db.commit()
+            db.refresh(owner)
+        
+        embeddings_list = []
+        
+        # Create directory for cow images
+        os.makedirs("static/cow_images", exist_ok=True)
+        
+        for i, f in enumerate(files[:5]):
+            contents = await f.read()
+            nparr = np.frombuffer(contents, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if image is None:
+                continue
+            nose = detect_nose(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            if nose is None:
+                continue
+            try:
+                tensor = preprocess_image(nose)
+                emb = extract_embedding(tensor)
+                
+                # Convert image to bytes for database storage
+                _, buffer = cv2.imencode('.jpg', image)
+                image_bytes = buffer.tobytes()
+                
+                embeddings_list.append((emb, image_bytes))
+            except ValueError as e:
+                print(f"Skipping poor quality image: {e}")
+                continue
+        
+        if len(embeddings_list) < 1:  # Reduce requirement for testing
+            raise HTTPException(status_code=400, detail="Need at least 1 high-quality image for registration")
+        
+        print(f"Processed {len(embeddings_list)} embeddings successfully")
+        
+        # Create cow and embeddings
         # Create cow and embeddings
         cow = Cow(cow_tag=cow_tag, breed=breed, color=color, age=cow_age, owner_id=owner.owner_id)
         db.add(cow)
@@ -477,123 +477,122 @@ async def verify_cow(
         
         if not files:
             raise HTTPException(status_code=400, detail="No images provided")
-    
-    # Process images
-    query_embeddings = []
-    for f in files[:3]:
-        contents = await f.read()
-        nparr = np.frombuffer(contents, np.uint8)
-        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if image is None:
-            continue
-        nose = detect_nose(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        if nose is None:
-            continue
-        try:
-            tensor = preprocess_image(nose)
-            emb = extract_embedding(tensor)
-            query_embeddings.append(emb)
-        except ValueError:
-            continue
-    
-    if len(query_embeddings) == 0:
-        raise HTTPException(status_code=400, detail="No valid images for verification")
-    
-    # Use average of query embeddings
-    query_emb = np.mean(query_embeddings, axis=0)
-    query_emb = query_emb / np.linalg.norm(query_emb)
-    
-    # Check against database
-    all_cows = db.query(Cow).filter(Cow.embeddings.any()).all()
-    
-    if not all_cows:
-        return {
-            "registered": False, 
-            "status": "NOT_REGISTERED",
-            "message": "❌ COW NOT REGISTERED - No cows in database"
-        }
-    
-    cow_scores = []
-    for cow in all_cows:
-        if not cow.embeddings or len(cow.embeddings) < 3:
-            continue
+        
+        # Process images
+        query_embeddings = []
+        for f in files[:3]:
+            contents = await f.read()
+            nparr = np.frombuffer(contents, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if image is None:
+                continue
+            nose = detect_nose(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            if nose is None:
+                continue
+            try:
+                tensor = preprocess_image(nose)
+                emb = extract_embedding(tensor)
+                query_embeddings.append(emb)
+            except ValueError:
+                continue
+        
+        if len(query_embeddings) == 0:
+            raise HTTPException(status_code=400, detail="No valid images for verification")
+        
+        # Use average of query embeddings
+        query_emb = np.mean(query_embeddings, axis=0)
+        query_emb = query_emb / np.linalg.norm(query_emb)
+        
+        # Check against database
+        all_cows = db.query(Cow).filter(Cow.embeddings.any()).all()
+        
+        if not all_cows:
+            return {
+                "registered": False, 
+                "status": "NOT_REGISTERED",
+                "message": "❌ COW NOT REGISTERED - No cows in database"
+            }
+        cow_scores = []
+        for cow in all_cows:
+            if not cow.embeddings or len(cow.embeddings) < 3:
+                continue
+                
+            similarities = []
+            for stored_emb in cow.embeddings:
+                stored_vector = np.array(stored_emb.embedding, dtype=np.float32)
+                stored_norm = stored_vector / np.linalg.norm(stored_vector)
+                cosine_sim = np.dot(query_emb, stored_norm)
+                similarities.append(cosine_sim)
             
-        similarities = []
-        for stored_emb in cow.embeddings:
-            stored_vector = np.array(stored_emb.embedding, dtype=np.float32)
-            stored_norm = stored_vector / np.linalg.norm(stored_vector)
-            cosine_sim = np.dot(query_emb, stored_norm)
-            similarities.append(cosine_sim)
+            similarities = np.array(similarities)
+            top3_avg = np.mean(np.sort(similarities)[-3:])
+            cow_scores.append((cow, top3_avg))
         
-        similarities = np.array(similarities)
-        top3_avg = np.mean(np.sort(similarities)[-3:])
-        cow_scores.append((cow, top3_avg))
-    
-    # Sort by score
-    cow_scores.sort(key=lambda x: x[1], reverse=True)
-    
-    best_match = cow_scores[0][0]
-    best_score = cow_scores[0][1]
-    
-    VERIFICATION_THRESHOLD = 0.82
-    
-    if best_score >= VERIFICATION_THRESHOLD:
-        owner = best_match.owner
+        # Sort by score
+        cow_scores.sort(key=lambda x: x[1], reverse=True)
         
-        # Log verification
-        verification_log = VerificationLog(
-            cow_id=best_match.cow_id,
-            similarity_score=best_score,
-            verified=True,
-            user_id=1
-        )
-        db.add(verification_log)
-        db.commit()
+        best_match = cow_scores[0][0]
+        best_score = cow_scores[0][1]
         
-        # Send verification SMS
-        if owner:
-            send_sms(owner.phone, f"Your cow {best_match.cow_tag} was successfully verified!")
+        VERIFICATION_THRESHOLD = 0.82
         
-        return {
-            "registered": True,
-            "status": "REGISTERED",
-            "message": "✅ COW IS REGISTERED - Verification Successful",
-            "cow_details": {
-                "cow_tag": best_match.cow_tag,
-                "cow_id": best_match.cow_id,
-                "breed": best_match.breed or "Not specified",
-                "color": best_match.color or "Not specified",
-                "age": f"{best_match.age} years" if best_match.age else "Not specified"
-            },
-            "owner_details": {
-                "owner_name": owner.full_name if owner else "Unknown",
-                "owner_email": owner.email if owner else "Unknown",
-                "owner_phone": owner.phone if owner else "Unknown"
-            },
-            "verification_info": {
-                "similarity_score": round(best_score, 4),
-                "confidence_level": "HIGH" if best_score > 0.85 else "MEDIUM"
+        if best_score >= VERIFICATION_THRESHOLD:
+            owner = best_match.owner
+            
+            # Log verification
+            verification_log = VerificationLog(
+                cow_id=best_match.cow_id,
+                similarity_score=best_score,
+                verified=True,
+                user_id=1
+            )
+            db.add(verification_log)
+            db.commit()
+            
+            # Send verification SMS
+            if owner:
+                send_sms(owner.phone, f"Your cow {best_match.cow_tag} was successfully verified!")
+            
+            return {
+                "registered": True,
+                "status": "REGISTERED",
+                "message": "✅ COW IS REGISTERED - Verification Successful",
+                "cow_details": {
+                    "cow_tag": best_match.cow_tag,
+                    "cow_id": best_match.cow_id,
+                    "breed": best_match.breed or "Not specified",
+                    "color": best_match.color or "Not specified",
+                    "age": f"{best_match.age} years" if best_match.age else "Not specified"
+                },
+                "owner_details": {
+                    "owner_name": owner.full_name if owner else "Unknown",
+                    "owner_email": owner.email if owner else "Unknown",
+                    "owner_phone": owner.phone if owner else "Unknown"
+                },
+                "verification_info": {
+                    "similarity_score": round(best_score, 4),
+                    "confidence_level": "HIGH" if best_score > 0.85 else "MEDIUM"
+                }
             }
-        }
-    else:
-        # Log failed verification
-        verification_log = VerificationLog(
-            similarity_score=best_score,
-            verified=False,
-            user_id=1
-        )
-        db.add(verification_log)
-        db.commit()
-        
-        return {
-            "registered": False,
-            "status": "NOT_REGISTERED", 
-            "message": "❌ COW NOT REGISTERED - This cow is not in the system",
-            "verification_info": {
-                "highest_similarity": round(best_score, 4),
-                "threshold_required": VERIFICATION_THRESHOLD
+        else:
+            # Log failed verification
+            verification_log = VerificationLog(
+                similarity_score=best_score,
+                verified=False,
+                user_id=1
+            )
+            db.add(verification_log)
+            db.commit()
+            
+            return {
+                "registered": False,
+                "status": "NOT_REGISTERED", 
+                "message": "❌ COW NOT REGISTERED - This cow is not in the system",
+                "verification_info": {
+                    "highest_similarity": round(best_score, 4),
+                    "threshold_required": VERIFICATION_THRESHOLD
+                }
             }
-        }
     except Exception as e:
         print(f"Verification error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
@@ -614,7 +613,8 @@ def health_check():
         "status": "healthy" if db_connected else "database_error",
         "model_loaded": siamese_model is not None,
         "database_connected": db_connected,
-        "auth": "disabled"
+        "auth": "disabled",
+        "timestamp": datetime.now().isoformat()
     }
 
 
