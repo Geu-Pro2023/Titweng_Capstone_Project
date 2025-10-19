@@ -356,6 +356,14 @@ async def lifespan(app: FastAPI):
     os.makedirs("static", exist_ok=True)
     siamese_model = load_siamese_model()
     
+    # Create database tables
+    try:
+        from app.database import Base, engine
+        Base.metadata.create_all(bind=engine)
+        print("Database tables created successfully")
+    except Exception as e:
+        print(f"Error creating tables: {e}")
+    
     # Create admin user if not exists
     try:
         db = SessionLocal()
