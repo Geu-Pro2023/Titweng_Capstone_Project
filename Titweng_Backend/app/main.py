@@ -344,6 +344,8 @@ async def register_cow(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ):
+    try:
+        print(f"Registration started for {owner_name}")
     # Auto-generate secure cow_tag
     cow_tag = generate_next_cow_tag(db)
     
@@ -439,6 +441,7 @@ async def register_cow(
         }
         
     except Exception as e:
+        print(f"Registration error: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
@@ -448,6 +451,8 @@ async def verify_cow(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ):
+    try:
+        print(f"Verification started with {len(files)} files")
     if not files:
         raise HTTPException(status_code=400, detail="No images provided")
     
@@ -567,10 +572,28 @@ async def verify_cow(
                 "threshold_required": VERIFICATION_THRESHOLD
             }
         }
+    except Exception as e:
+        print(f"Verification error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
 @app.get("/health", tags=["Status"])
 def health_check():
-    return {"status": "healthy", "model_loaded": siamese_model is not None, "auth": "disabled"}
+    try:
+        # Test database connection
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        db_connected = True
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        db_connected = False
+    
+    return {
+        "status": "healthy" if db_connected else "database_error",
+        "model_loaded": siamese_model is not None,
+        "database_connected": db_connected,
+        "auth": "disabled"
+    }
 
 
 
@@ -705,11 +728,18 @@ async def submit_report(
     location: str = Form(None),
     db: Session = Depends(get_db)
 ):
+    try:
+        print(f"Report submission started: {description[:50]}...")
     """Submit a report from mobile app"""
-    report = Report(user_id=1, description=description, location=location)  # Dummy user ID
-    db.add(report)
-    db.commit()
-    return {"success": True, "message": "Report submitted successfully"}
+        report = Report(user_id=1, description=description, location=location)  # Dummy user ID
+        db.add(report)
+        db.commit()
+        print("Report submitted successfully")
+        return {"success": True, "message": "Report submitted successfully"}
+    except Exception as e:
+        print(f"Report submission error: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Report submission failed: {str(e)}")
 
 @app.get("/preview-next-cow-tag", tags=["Admin Dashboard"])
 def preview_next_cow_tag(db: Session = Depends(get_db)):
