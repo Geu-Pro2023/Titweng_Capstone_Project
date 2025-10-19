@@ -359,12 +359,13 @@ async def lifespan(app: FastAPI):
     # Create admin user if not exists
     try:
         db = SessionLocal()
-        admin_user = db.query(User).filter(User.username == "admin").first()
+        admin_username = os.getenv("ADMIN_USERNAME", "admin")
+        admin_user = db.query(User).filter(User.username == admin_username).first()
         if not admin_user:
             admin_user = User(
-                username="admin",
-                email="admin@example.com",
-                password_hash=hash_password("admin123"),
+                username=admin_username,
+                email=os.getenv("ADMIN_EMAIL", "admin@example.com"),
+                password_hash=hash_password(os.getenv("ADMIN_PASSWORD", "admin123")),
                 role="admin"
             )
             db.add(admin_user)
