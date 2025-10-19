@@ -152,6 +152,115 @@ def send_sms(phone_number: str, message: str):
     except Exception as e:
         print(f"SMS failed: {e}")
 
+def generate_pdf_receipt(cow_tag: str, owner_name: str) -> bytes:
+    from reportlab.lib.pagesizes import A6
+    from reportlab.lib.colors import HexColor, black, white
+    from reportlab.lib.units import mm
+    import qrcode
+    
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A6)
+    width, height = A6
+    
+    # Background
+    c.setFillColor(HexColor('#f8f9fa'))
+    c.rect(0, 0, width, height, fill=1)
+    
+    # Header
+    c.setFillColor(HexColor('#3498db'))
+    c.rect(5*mm, height-35*mm, width-10*mm, 25*mm, fill=1)
+    
+    # Title
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 12)
+    title_text = "CATTLE REGISTRATION RECEIPT"
+    text_width = c.stringWidth(title_text, "Helvetica-Bold", 12)
+    c.drawString((width - text_width) / 2, height-32*mm, title_text)
+    
+    # Content
+    c.setFillColor(black)
+    y_pos = height - 45*mm
+    c.setFont("Helvetica", 9)
+    c.drawString(10*mm, y_pos, f"Cow Tag: {cow_tag}")
+    y_pos -= 6*mm
+    c.drawString(10*mm, y_pos, f"Owner: {owner_name}")
+    y_pos -= 6*mm
+    c.drawString(10*mm, y_pos, f"Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    
+    # Generate QR code
+    qr_data = f"COW:{cow_tag}|OWNER:{owner_name}|DATE:{datetime.now().strftime('%Y%m%d')}"
+    qr = qrcode.QRCode(version=1, box_size=2, border=1)
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Save QR temporarily
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as qr_temp:
+        qr_img.save(qr_temp.name, format='PNG')
+        qr_temp_path = qr_temp.name
+    
+    # Add QR to PDF
+    qr_x = width - 25*mm
+    c.drawImage(qr_temp_path, qr_x, 25*mm, width=15*mm, height=15*mm)
+    os.unlink(qr_temp_path)
+    
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.read()
+
+def send_email_with_receipt(owner_email: str, owner_name: str, cow_tag: str, pdf_receipt: bytes):
+    try:
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.base import MIMEBase
+        from email import encoders
+        
+        smtp_server = os.getenv("SMTP_SERVER")
+        smtp_port = int(os.getenv("SMTP_PORT", 587))
+        smtp_username = os.getenv("SMTP_USERNAME")
+        smtp_password = os.getenv("SMTP_PASSWORD")
+        
+        if not all([smtp_server, smtp_username, smtp_password]):
+            print("Email not configured")
+            return
+        
+        msg = MIMEMultipart()
+        msg['From'] = smtp_username
+        msg['To'] = owner_email
+        msg['Subject'] = f"Cattle Registration Confirmation - {cow_tag}"
+        
+        body = f"""Dear {owner_name},
+        
+Your cattle has been successfully registered with tag: {cow_tag}
+        
+Please find your registration receipt attached.
+        
+Best regards,
+Titweng Cattle Recognition System"""
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Attach PDF
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(pdf_receipt)
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f'attachment; filename="{cow_tag}_receipt.pdf"')
+        msg.attach(part)
+        
+        # Send email
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"Email sent to {owner_email}")
+    except Exception as e:
+        print(f"Email failed: {e}")
+
 def generate_next_cow_tag(db: Session) -> str:
     """Generate secure cow tag with random component"""
     import random
@@ -300,11 +409,32 @@ async def register_cow(
         
         db.commit()
         
+        # Generate PDF receipt
+        pdf_receipt = generate_pdf_receipt(cow_tag, owner_name)
+        
+        # Save receipt
+        os.makedirs("static/receipts", exist_ok=True)
+        receipt_path = f"static/receipts/{cow_tag}_receipt.pdf"
+        with open(receipt_path, "wb") as f:
+            f.write(pdf_receipt)
+        
+        # Update cow with receipt link
+        cow.receipt_pdf_link = receipt_path
+        qr_data = f"COW:{cow_tag}|OWNER:{owner_name}|DATE:{datetime.now().strftime('%Y%m%d')}"
+        cow.qr_code_link = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={qr_data}"
+        db.commit()
+        
+        # Send notifications
+        send_sms(owner_phone, f"Your cow {cow_tag} has been registered successfully!")
+        send_email_with_receipt(owner_email, owner_name, cow_tag, pdf_receipt)
+        
         return {
             "success": True, 
             "cow_id": cow.cow_id,
             "cow_tag": cow_tag,
-            "message": f"Cow registered successfully with tag {cow_tag}"
+            "receipt_path": receipt_path,
+            "message": f"Cow registered successfully with tag {cow_tag}",
+            "notifications": "SMS and email sent"
         }
         
     except Exception as e:
@@ -391,6 +521,10 @@ async def verify_cow(
         db.add(verification_log)
         db.commit()
         
+        # Send verification SMS
+        if owner:
+            send_sms(owner.phone, f"Your cow {best_match.cow_tag} was successfully verified!")
+        
         return {
             "registered": True,
             "status": "REGISTERED",
@@ -454,6 +588,19 @@ def get_all_cows(db: Session = Depends(get_db)):
             "embeddings_count": len(cow.embeddings)
         })
     return {"total_cows": len(result), "cows": result}
+
+@app.get("/download-receipt/{cow_tag}", tags=["Cattle Management"])
+def download_receipt(cow_tag: str, db: Session = Depends(get_db)):
+    """Download PDF receipt for a registered cow"""
+    cow = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
+    if not cow or not cow.receipt_pdf_link:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    
+    return FileResponse(
+        path=cow.receipt_pdf_link,
+        filename=f"{cow_tag}_receipt.pdf",
+        media_type="application/pdf"
+    )
 
 if __name__ == "__main__":
     import uvicorn
