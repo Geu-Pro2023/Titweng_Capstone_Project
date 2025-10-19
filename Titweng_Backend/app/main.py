@@ -46,7 +46,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password[:72])
+    return pwd_context.hash(password[:72])  # Truncate to 72 bytes for bcrypt
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -376,13 +376,14 @@ async def lifespan(app: FastAPI):
     # Create admin user if not exists
     try:
         db = SessionLocal()
-        admin_username = os.getenv("ADMIN_USERNAME", "admin")
+        admin_username = os.getenv("ADMIN_USERNAME", "admin")[:50]  # Truncate username
         admin_user = db.query(User).filter(User.username == admin_username).first()
         if not admin_user:
+            admin_password = os.getenv("ADMIN_PASSWORD", "admin123")[:72]  # Truncate password
             admin_user = User(
                 username=admin_username,
                 email=os.getenv("ADMIN_EMAIL", "admin@example.com"),
-                password_hash=hash_password(os.getenv("ADMIN_PASSWORD", "admin123")),
+                password_hash=hash_password(admin_password),
                 role="admin"
             )
             db.add(admin_user)
