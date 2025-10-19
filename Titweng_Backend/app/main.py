@@ -228,6 +228,7 @@ def send_email_with_receipt(owner_email: str, owner_name: str, cow_tag: str, pdf
             return
         
         print(f"Attempting to send email to {owner_email} using {smtp_username}")
+        print(f"SMTP Config: Server={smtp_server}, Port={smtp_port}, User={smtp_username}")
         
         msg = MIMEMultipart()
         msg['From'] = smtp_username
@@ -253,11 +254,16 @@ Titweng Cattle Recognition System"""
         msg.attach(part)
         
         # Send email with better error handling
+        print("Connecting to SMTP server...")
         server = smtplib.SMTP(smtp_server, smtp_port)
+        print("Starting TLS...")
         server.starttls()
+        print("Logging in...")
         server.login(smtp_username, smtp_password)
+        print("Sending message...")
         server.send_message(msg)
         server.quit()
+        print("Email sent successfully!")
         
         print(f"Email successfully sent to {owner_email}")
     except Exception as e:
@@ -453,10 +459,15 @@ async def register_cow(
         
         # Send notifications
         try:
+            print("Sending SMS notification...")
             send_sms(owner_phone, f"Your cow {cow_tag} has been registered successfully!")
+            print("Sending email notification...")
             send_email_with_receipt(owner_email, owner_name, cow_tag, pdf_receipt)
+            print("Notifications sent successfully")
         except Exception as e:
-            print(f"Notification error: {e}")
+            print(f"Notification error: {str(e)}")
+            import traceback
+            traceback.print_exc()
         
         return {
             "success": True, 
@@ -576,7 +587,7 @@ async def verify_cow(
                     "owner_phone": owner.phone if owner else "Unknown"
                 },
                 "verification_info": {
-                    "similarity_score": round(best_score, 4),
+                    "similarity_score": round(float(best_score), 4),
                     "confidence_level": "HIGH" if best_score > 0.85 else "MEDIUM"
                 }
             }
@@ -595,7 +606,7 @@ async def verify_cow(
                 "status": "NOT_REGISTERED", 
                 "message": "❌ COW NOT REGISTERED - This cow is not in the system",
                 "verification_info": {
-                    "highest_similarity": round(best_score, 4),
+                    "highest_similarity": round(float(best_score), 4),
                     "threshold_required": VERIFICATION_THRESHOLD
                 }
             }
