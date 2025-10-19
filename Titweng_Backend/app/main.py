@@ -330,6 +330,24 @@ app.add_middleware(
 def root():
     return {"message": "Titweng Cattle Recognition API - No Authentication Required", "status": "live"}
 
+@app.post("/test-simple", tags=["Status"])
+def test_simple(test_data: str = Form(...), db: Session = Depends(get_db)):
+    """Simple test endpoint without file processing"""
+    try:
+        # Test database
+        result = db.execute(text("SELECT COUNT(*) FROM cows"))
+        cow_count = result.fetchone()[0]
+        
+        return {
+            "success": True,
+            "test_data": test_data,
+            "cow_count": cow_count,
+            "message": "Database and basic functionality working"
+        }
+    except Exception as e:
+        print(f"Simple test error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
+
 # -------- Admin Dashboard --------
 @app.post("/register-cow", tags=["Admin Dashboard"])
 async def register_cow(
@@ -346,13 +364,14 @@ async def register_cow(
 ):
     try:
         print(f"Registration started for {owner_name}")
-    # Auto-generate secure cow_tag
-    cow_tag = generate_next_cow_tag(db)
-    
-    # Handle age conversion
-    cow_age = None
-    if age and age.isdigit():
-        cow_age = int(age)
+        
+        # Auto-generate secure cow_tag
+        cow_tag = generate_next_cow_tag(db)
+        
+        # Handle age conversion
+        cow_age = None
+        if age and age.isdigit():
+            cow_age = int(age)
     
     # Create or get owner
     owner = db.query(Owner).filter(Owner.email == owner_email).first()
@@ -389,8 +408,10 @@ async def register_cow(
             print(f"Skipping poor quality image: {e}")
             continue
     
-    if len(embeddings_list) < 3:
-        raise HTTPException(status_code=400, detail="Need at least 3 high-quality images for registration")
+    if len(embeddings_list) < 1:  # Reduce requirement for testing
+        raise HTTPException(status_code=400, detail="Need at least 1 high-quality image for registration")
+    
+    print(f"Processed {len(embeddings_list)} embeddings successfully")
     
     try:
         # Create cow and embeddings
@@ -453,8 +474,9 @@ async def verify_cow(
 ):
     try:
         print(f"Verification started with {len(files)} files")
-    if not files:
-        raise HTTPException(status_code=400, detail="No images provided")
+        
+        if not files:
+            raise HTTPException(status_code=400, detail="No images provided")
     
     # Process images
     query_embeddings = []
@@ -730,7 +752,8 @@ async def submit_report(
 ):
     try:
         print(f"Report submission started: {description[:50]}...")
-    """Submit a report from mobile app"""
+        
+        # Submit a report from mobile app
         report = Report(user_id=1, description=description, location=location)  # Dummy user ID
         db.add(report)
         db.commit()
