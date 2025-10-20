@@ -1,0 +1,48 @@
+[build]
+  publish = "."
+  
+[build.environment]
+  NODE_VERSION = "18"
+
+# Security Headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' https://cdnjs.cloudflare.com;"
+
+# Redirect all traffic to HTTPS
+[[redirects]]
+  from = "http://titweng-admin.netlify.app/*"
+  to = "https://titweng-admin.netlify.app/:splat"
+  status = 301
+  force = true
+
+# Protect admin routes - redirect to login if not authenticated
+[[redirects]]
+  from = "/dashboard.html"
+  to = "/index.html"
+  status = 200
+  conditions = {Role = ["admin"]}
+
+# 404 redirect to login
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 404
+
+# Password protection (Netlify Pro feature)
+# [[redirects]]
+#   from = "/admin/*"
+#   to = "/admin/:splat"
+#   status = 200
+#   force = false
+#   conditions = {Role = ["admin"]}
+
+# Rate limiting (Netlify Pro feature)
+# [[edge_functions]]
+#   function = "rate-limit"
+#   path = "/api/*"

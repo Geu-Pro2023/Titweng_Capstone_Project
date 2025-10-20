@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titweng Admin Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="modal.css">
+    <link rel="stylesheet" href="register-form.css">
+    <link rel="stylesheet" href="dashboard-grid.css">
+    <link rel="stylesheet" href="security.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <img src="images/logo.png" alt="Titweng Logo" class="logo-img">
+            </div>
+            <div class="header-right">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Search by cow tag or cow ID..." id="globalSearch">
+                    <button class="search-btn" onclick="performGlobalSearch()">Search</button>
+                </div>
+                <div class="admin-info">
+                    <span>Admin User</span>
+                    <button class="logout-btn" onclick="logoutAdmin()"><i class="fas fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="nav-section nav-card">
+            <div class="nav-category" onclick="toggleNavSection(this)">
+                <span>Main</span>
+                <i class="fas fa-chevron-down nav-toggle"></i>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#dashboard" class="nav-link active"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="#register" class="nav-link"><i class="fas fa-plus-circle"></i> Register Cow</a></li>
+                <li><a href="#verify" class="nav-link"><i class="fas fa-check-circle"></i> Verify Cow</a></li>
+                <li><a href="#suspects" class="nav-link"><i class="fas fa-exclamation-triangle"></i> Suspect Report</a></li>
+            </ul>
+        </div>
+        
+        <div class="nav-section nav-card">
+            <div class="nav-category" onclick="toggleNavSection(this)">
+                <span>Management</span>
+                <i class="fas fa-chevron-down nav-toggle"></i>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#cows" class="nav-link"><i class="fas fa-list-alt"></i> Cow Management</a></li>
+                <li><a href="#owners" class="nav-link"><i class="fas fa-users"></i> Owner Management</a></li>
+                <li><a href="#users" class="nav-link"><i class="fas fa-user"></i> User Management</a></li>
+                <li><a href="#admins" class="nav-link"><i class="fas fa-user-shield"></i> Admin Management</a></li>
+            </ul>
+        </div>
+        
+        <div class="nav-section nav-card">
+            <div class="nav-category" onclick="toggleNavSection(this)">
+                <span>System</span>
+                <i class="fas fa-chevron-down nav-toggle"></i>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#reports" class="nav-link"><i class="fas fa-chart-bar"></i> Reports & Analytics</a></li>
+                <li><a href="#admin" class="nav-link"><i class="fas fa-user-shield"></i> Admin Profile</a></li>
+                <li><a href="#settings" class="nav-link"><i class="fas fa-cog"></i> System Settings</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="content-section active">
+            <div class="breadcrumb">
+                <span>Dashboard</span>
+            </div>
+            
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-cow"></i></div>
+                    <div class="stat-info">
+                        <h3 id="totalCows">Loading...</h3>
+                        <p>Total Cows</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-users"></i></div>
+                    <div class="stat-info">
+                        <h3 id="totalOwners">Loading...</h3>
+                        <p>Total Owners</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-user-check"></i></div>
+                    <div class="stat-info">
+                        <h3 id="activeUsers">Loading...</h3>
+                        <p>Active Users</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="stat-info">
+                        <h3 id="pendingReports">Loading...</h3>
+                        <p>Pending Reports</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions-grid">
+                <div class="action-card" onclick="navigateToSection('register')">
+                    <div class="action-icon">
+                        <i class="fas fa-plus-circle"></i>
+                    </div>
+                    <div class="action-content">
+                        <h4>Register Cow</h4>
+                        <p>Add new cow to registry</p>
+                    </div>
+                </div>
+                <div class="action-card" onclick="navigateToSection('verify')">
+                    <div class="action-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="action-content">
+                        <h4>Verify Cow</h4>
+                        <p>Verify cow identity</p>
+                    </div>
+                </div>
+                <div class="action-card" onclick="navigateToSection('suspects')">
+                    <div class="action-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="action-content">
+                        <h4>View Reports</h4>
+                        <p>Check suspect reports</p>
+                    </div>
+                </div>
+                <div class="action-card" onclick="navigateToSection('cows')">
+                    <div class="action-icon">
+                        <i class="fas fa-list-alt"></i>
+                    </div>
+                    <div class="action-content">
+                        <h4>Manage Cows</h4>
+                        <p>View all registered cows</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Data Grid -->
+            <div class="dashboard-grid">
+                <div class="grid-section">
+                    <h3>Recent Cow Registrations</h3>
+                    <div class="grid-container" id="recentCowsGrid">
+                        <!-- Recent cows will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <div class="grid-section">
+                    <h3>Recent Suspect Reports</h3>
+                    <div class="grid-container" id="recentReportsGrid">
+                        <!-- Recent reports will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Register Cow Section -->
+        <section id="register" class="content-section">
+            <div class="breadcrumb">
+                <span>Main</span> &gt; <span class="breadcrumb-current">Register New Cow</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-plus-circle"></i> Register New Cow</h1>
+            
+            <div class="register-container">
+                <div class="register-form-card">
+                    <h2>Cow Registration Form</h2>
+                    <form id="cowRegistrationForm" class="registration-form">
+                        <div class="form-list">
+                            <div class="form-item">
+                                <label>Color *</label>
+                                <input type="text" name="color" placeholder="e.g., Black and White" required>
+                            </div>
+                            <div class="form-item">
+                                <label>Breed *</label>
+                                <select name="breed" required>
+                                    <option value="">Select Breed</option>
+                                    <option value="Nilotic">Nilotic</option>
+                                    <option value="Sanga cattle">Sanga cattle</option>
+                                    <option value="Toposa-Mundari">Toposa-Mundari</option>
+                                    <option value="Southern Sudan Hill Zebu">Southern Sudan Hill Zebu</option>
+                                    <option value="Ankole-Watusi">Ankole-Watusi</option>
+                                </select>
+                            </div>
+                            <div class="form-item">
+                                <label>Age *</label>
+                                <input type="number" name="age" min="1" max="300" required>
+                            </div>
+                            <div class="form-item">
+                                <label>Owner Name *</label>
+                                <input type="text" name="owner_name" required>
+                            </div>
+                            <div class="form-item">
+                                <label>Owner Phone *</label>
+                                <input type="tel" name="owner_phone" required>
+                            </div>
+                            <div class="form-item">
+                                <label>Owner Email</label>
+                                <input type="email" name="owner_email">
+                            </div>
+                            <div class="form-item">
+                                <label>National ID *</label>
+                                <input type="text" name="national_id" placeholder="National ID Number" required>
+                            </div>
+                            <div class="form-item">
+                                <label>Address *</label>
+                                <textarea name="owner_address" rows="2" required></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="form-item">
+                            <label>Nose Print Images (5-7 images) *</label>
+                            <div class="image-capture-options">
+                                <button type="button" class="capture-btn" onclick="openCamera()"><i class="fas fa-camera"></i> Take Photo</button>
+                                <button type="button" class="upload-btn" onclick="document.getElementById('noseImages').click()"><i class="fas fa-upload"></i> Upload Files</button>
+                            </div>
+                            <div class="file-upload-area" id="fileUploadArea">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>Drag and drop nose print images here or click to browse</p>
+                                <input type="file" id="noseImages" name="files" multiple accept="image/*">
+                            </div>
+                            <div class="camera-section" id="cameraSection" style="display: none;">
+                                <video id="cameraVideo" autoplay></video>
+                                <canvas id="cameraCanvas" style="display: none;"></canvas>
+                                <div class="camera-controls">
+                                    <button type="button" class="btn primary" onclick="capturePhoto()">Capture</button>
+                                    <button type="button" class="btn secondary" onclick="closeCamera()">Close Camera</button>
+                                </div>
+                            </div>
+                            <div class="image-preview" id="imagePreview"></div>
+                            <div id="formMessage" class="form-message" style="display: none;"></div>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" class="btn tertiary" onclick="showNextCowTag()">Preview Next Tag</button>
+                            <button type="button" class="btn secondary">Save as Draft</button>
+                            <button type="submit" class="btn primary">Register Cow</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Verify Cow Section -->
+        <section id="verify" class="content-section">
+            <div class="breadcrumb">
+                <span>Main</span> &gt; <span class="breadcrumb-current">Verify Cow Identity</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-check-circle"></i> Verify Cow Identity</h1>
+            
+            <div class="centered-content">
+                <div class="register-form-card">
+                    <h2>Cow Verification</h2>
+                    <form id="cowVerificationForm" class="registration-form">
+                        <div class="form-list">
+                            <div class="form-item">
+                                <label>Verification Method</label>
+                                <div class="search-methods">
+                                    <label class="radio-option">
+                                        <input type="radio" name="verifyMethod" value="tag" checked onchange="toggleVerificationMethod()">
+                                        <span>By Cow Tag</span>
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="verifyMethod" value="image" onchange="toggleVerificationMethod()">
+                                        <span>By Nose Print Image</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="tagVerification" class="form-item">
+                            <label>Enter Cow Tag *</label>
+                            <input type="text" id="tagInput" placeholder="e.g., T001" required>
+                            <button type="button" class="btn primary" onclick="verifyByTag()" style="margin-top: 1rem;">Verify by Tag</button>
+                        </div>
+                        
+                        <div id="imageVerification" class="form-item" style="display: none;">
+                            <label>Upload Nose Print Image for Verification *</label>
+                            <div class="image-capture-options">
+                                <button type="button" class="capture-btn" onclick="openVerifyCamera()"><i class="fas fa-camera"></i> Take Photo</button>
+                                <button type="button" class="upload-btn" onclick="document.getElementById('verifyImage').click()"><i class="fas fa-upload"></i> Upload Image</button>
+                            </div>
+                            <div class="file-upload-area" id="verifyUploadArea">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>Upload nose print image to verify</p>
+                                <input type="file" id="verifyImage" accept="image/*">
+                            </div>
+                            <div class="camera-section" id="verifyCameraSection" style="display: none;">
+                                <video id="verifyCameraVideo" autoplay></video>
+                                <canvas id="verifyCameraCanvas" style="display: none;"></canvas>
+                                <div class="camera-controls">
+                                    <button type="button" class="btn primary" onclick="captureVerifyPhoto()">Capture</button>
+                                    <button type="button" class="btn secondary" onclick="closeVerifyCamera()">Close Camera</button>
+                                </div>
+                            </div>
+                            <div class="image-preview" id="verifyPreview"></div>
+                            <button type="button" class="btn primary" onclick="verifyByImage()" style="margin-top: 1rem;">Verify by Image</button>
+                        </div>
+                        
+                        <div id="verificationResult" class="form-item" style="display: none;">
+                            <div class="result-header">
+                                <h3>Verification Result</h3>
+                                <div class="confidence-score">
+                                    <span>Confidence: </span>
+                                    <span id="confidenceScore">-</span>
+                                </div>
+                            </div>
+                            <div class="result-status" id="resultStatus">
+                                <!-- Result will be populated by JavaScript -->
+                            </div>
+                            <div id="cowDetails" class="cow-details" style="display: none;">
+                                <h4>Cow Details</h4>
+                                <div class="details-grid">
+                                    <div class="detail-item">
+                                        <label>Cow ID:</label>
+                                        <span id="detailCowId">-</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Color:</label>
+                                        <span id="detailColor">-</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Breed:</label>
+                                        <span id="detailBreed">-</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Age:</label>
+                                        <span id="detailAge">-</span>
+                                    </div>
+                                </div>
+                                <h4>Owner Details</h4>
+                                <div class="details-grid">
+                                    <div class="detail-item">
+                                        <label>Full Name:</label>
+                                        <span id="detailOwnerName">-</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Telephone:</label>
+                                        <span id="detailPhone">-</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Email:</label>
+                                        <span id="detailEmail">-</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Address:</label>
+                                        <span id="detailAddress">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" class="btn tertiary" onclick="resetVerification()">Reset</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Suspect Report Section -->
+        <section id="suspects" class="content-section">
+            <div class="breadcrumb">
+                <span>Main</span> &gt; <span class="breadcrumb-current">Suspect Reports</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-exclamation-triangle"></i> Suspect Reports</h1>
+            
+            <div class="centered-content">
+            <div class="section-header">
+                <h2>Suspect Reports</h2>
+                <div class="header-actions">
+                    <button class="btn secondary">Export Reports</button>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="stat-info">
+                        <h3 id="urgentReports">0</h3>
+                        <p>Urgent Reports</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-bell"></i></div>
+                    <div class="stat-info">
+                        <h3 id="newReports">0</h3>
+                        <p>New Reports</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-search"></i></div>
+                    <div class="stat-info">
+                        <h3 id="investigatingReports">0</h3>
+                        <p>Investigating</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                    <div class="stat-info">
+                        <h3 id="resolvedReports">0</h3>
+                        <p>Resolved</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filters">
+                <select id="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="investigating">Investigating</option>
+                    <option value="resolved">Resolved</option>
+                </select>
+                <select id="priorityFilter">
+                    <option value="">All Priority</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                </select>
+                <input type="date" id="dateFilter">
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="reportsTable">
+                    <thead>
+                        <tr>
+                            <th>Report ID</th>
+                            <th>Reporter</th>
+                            <th>Location</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportsTableBody">
+                        <!-- Report rows will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </section>
+
+        <!-- Cow Management Section -->
+        <section id="cows" class="content-section">
+            <div class="breadcrumb">
+                <span>Management</span> &gt; <span class="breadcrumb-current">Cow Management</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-list-alt"></i> Cow Management</h1>
+            
+            <div class="centered-content">
+            <div class="section-header">
+                <h2>Cow Registry</h2>
+                <div class="header-actions">
+                    <button class="btn primary" onclick="openModal('registerCowModal')">Register New Cow</button>
+                    <button class="btn secondary">Export CSV</button>
+                    <button class="btn tertiary">Print QR Codes</button>
+                </div>
+            </div>
+
+            <div class="filters">
+                <select id="breedFilter">
+                    <option value="">All Breeds</option>
+                    <option value="Nilotic">Nilotic</option>
+                    <option value="Sanga cattle">Sanga cattle</option>
+                    <option value="Toposa-Mundari">Toposa-Mundari</option>
+                    <option value="Southern Sudan Hill Zebu">Southern Sudan Hill Zebu</option>
+                    <option value="Ankole-Watusi">Ankole-Watusi</option>
+                </select>
+                <input type="date" id="dateFilter">
+                <select id="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="verified">Verified</option>
+                    <option value="pending">Pending</option>
+                </select>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="cowTable">
+                    <thead>
+                        <tr>
+                            <th>Cow ID</th>
+                            <th>Tag</th>
+                            <th>Breed</th>
+                            <th>Owner</th>
+                            <th>Registration Date</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cowTableBody">
+                        <!-- Table rows will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </section>
+
+        <!-- Owner Management Section -->
+        <section id="owners" class="content-section">
+            <div class="breadcrumb">
+                <span>Management</span> &gt; <span class="breadcrumb-current">Owner Management</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-users"></i> Owner Management</h1>
+            
+            <div class="centered-content">
+            <div class="section-header">
+                <h2><i class="fas fa-address-book"></i> Owner Directory</h2>
+                <div class="header-actions">
+                    <button class="btn primary" onclick="openModal('addOwnerModal')">Add Owner</button>
+                    <button class="btn secondary">Send Notification</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="ownerTable">
+                    <thead>
+                        <tr>
+                            <th>Owner Name</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>Total Cows</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ownerTableBody">
+                        <!-- Owner rows will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </section>
+
+        <!-- Reports & Analytics Section -->
+        <section id="reports" class="content-section">
+            <div class="breadcrumb">
+                <span>System</span> &gt; <span class="breadcrumb-current">Reports & Analytics</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-chart-bar"></i> Reports & Analytics</h1>
+            
+            <div class="centered-content">
+            <div class="reports-grid">
+                <div class="report-card">
+                    <h3>Suspect Reports</h3>
+                    <div class="report-stats">
+                        <div class="report-stat">
+                            <span class="count">3</span>
+                            <span class="label">Pending</span>
+                        </div>
+                        <div class="report-stat">
+                            <span class="count">7</span>
+                            <span class="label">Investigating</span>
+                        </div>
+                        <div class="report-stat">
+                            <span class="count">24</span>
+                            <span class="label">Resolved</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="analytics-chart">
+                    <h3>Verification Patterns</h3>
+                    <canvas id="patternsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="reports-table">
+                <h3>Recent Reports</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Report ID</th>
+                            <th>Reporter</th>
+                            <th>Location</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportsTableBody">
+                        <!-- Report rows will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </section>
+
+        <!-- User Management Section -->
+        <section id="users" class="content-section">
+            <div class="breadcrumb">
+                <span>Management</span> &gt; <span class="breadcrumb-current">User Management</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-user-cog"></i> User Management</h1>
+            
+            <div class="centered-content">
+            <div class="section-header">
+                <h2>Mobile App Users</h2>
+                <div class="header-actions">
+                    <button class="btn secondary">Export Users</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Registration Date</th>
+                            <th>Activity Level</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <!-- User rows will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </section>
+
+        <!-- Admin Management Section -->
+        <section id="admins" class="content-section">
+            <div class="breadcrumb">
+                <span>Management</span> &gt; <span class="breadcrumb-current">Admin Management</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-user-shield"></i> Admin Management</h1>
+            
+            <div class="centered-content">
+            <div class="section-header">
+                <h2><i class="fas fa-users-cog"></i> System Administrators</h2>
+                <div class="header-actions">
+                    <button class="btn primary" onclick="openModal('addAdminModal')">Add New Admin</button>
+                    <button class="btn secondary">Export Admin List</button>
+                </div>
+            </div>
+
+            <div class="admin-roles-info">
+                <div class="role-card">
+                    <h4>Super Admin</h4>
+                    <p>Full system access, can manage all admins</p>
+                </div>
+                <div class="role-card">
+                    <h4>Admin</h4>
+                    <p>Can register cows, manage owners, view reports</p>
+                </div>
+                <div class="role-card">
+                    <h4>Operator</h4>
+                    <p>Can register cows and verify identities only</p>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="adminTable">
+                    <thead>
+                        <tr>
+                            <th>Admin ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Location</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Last Login</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminTableBody">
+                        <!-- Admin rows will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </section>
+
+        <!-- Admin Profile Section -->
+        <section id="admin" class="content-section">
+            <div class="breadcrumb">
+                <span>System</span> &gt; <span class="breadcrumb-current">Admin Profile</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-user-shield"></i> Admin Profile</h1>
+            
+            <div class="centered-content">
+                <div class="profile-card">
+                    <div class="profile-header">
+                        <div class="profile-avatar">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
+                        <div class="profile-info">
+                            <h3 id="adminName">Loading...</h3>
+                            <p id="adminRole">Loading...</p>
+                            <span class="status online">Online</span>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-details">
+                        <div class="detail-row">
+                            <label>Email:</label>
+                            <span id="adminEmail">Loading...</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>Last Login:</label>
+                            <span id="lastLogin">Loading...</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>Session:</label>
+                            <span class="status online">Active</span>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-actions">
+                        <button class="btn secondary" onclick="editAdminProfile()">Edit Profile</button>
+                        <button class="btn tertiary" onclick="changeAdminPassword()">Change Password</button>
+                    </div>
+                </div>
+
+                <div class="admin-stats-card">
+                    <h3>System Overview</h3>
+                    <div class="stats-list">
+                        <div class="stat-item">
+                            <label>Total Cows:</label>
+                            <span id="totalCowsAdmin">Loading...</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Active Users:</label>
+                            <span id="activeUsersAdmin">Loading...</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Pending Reports:</label>
+                            <span id="pendingReportsAdmin">Loading...</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>System Uptime:</label>
+                            <span id="systemUptime">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- System Settings Section -->
+        <section id="settings" class="content-section">
+            <div class="breadcrumb">
+                <span>System</span> &gt; <span class="breadcrumb-current">System Settings</span>
+            </div>
+            <h1 class="page-title"><i class="fas fa-cog"></i> System Settings</h1>
+            
+            <div class="centered-content">
+                <div class="settings-card">
+                    <h3>System Status</h3>
+                    <div class="status-list">
+                        <div class="status-item">
+                            <span>Database</span>
+                            <span class="status online" id="databaseStatus">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span>API Service</span>
+                            <span class="status online" id="apiStatus">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span>ML Model</span>
+                            <span class="status good" id="modelStatus">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span>Storage</span>
+                            <span class="status good" id="storageStatus">Loading...</span>
+                        </div>
+                    </div>
+                    <button class="btn tertiary" onclick="refreshSystemStatus()">Refresh Status</button>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>System Configuration</h3>
+                    <div class="config-list">
+                        <div class="config-item">
+                            <label>ML Model Version:</label>
+                            <span id="modelVersion">Loading...</span>
+                        </div>
+                        <div class="config-item">
+                            <label>Session Timeout:</label>
+                            <input type="number" id="sessionTimeout" min="5" max="120" style="width: 80px;"> minutes
+                        </div>
+                        <div class="config-item">
+                            <label>Auto Backup:</label>
+                            <select id="backupSchedule" style="width: 120px;">
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="disabled">Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn secondary" onclick="saveSystemSettings()">Save Settings</button>
+                </div>
+
+                <div class="settings-card">
+                    <h3>Backup & Maintenance</h3>
+                    <div class="backup-info">
+                        <div class="backup-item">
+                            <label>Last Backup:</label>
+                            <span id="lastBackup">Loading...</span>
+                        </div>
+                        <div class="backup-item">
+                            <label>Database Size:</label>
+                            <span id="databaseSize">Loading...</span>
+                        </div>
+                        <div class="backup-item">
+                            <label>Next Scheduled:</label>
+                            <span id="nextBackup">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="backup-actions">
+                        <button class="btn primary" onclick="runSystemBackup()">Run Backup Now</button>
+                        <button class="btn tertiary" onclick="exportSystemData()">Export Data</button>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <h3>Security Settings</h3>
+                    <div class="security-list">
+                        <div class="security-item">
+                            <label>Two-Factor Auth:</label>
+                            <select id="twoFactorAuth" style="width: 100px;">
+                                <option value="disabled">Disabled</option>
+                                <option value="enabled">Enabled</option>
+                            </select>
+                        </div>
+                        <div class="security-item">
+                            <label>Login Attempts:</label>
+                            <input type="number" id="loginAttempts" min="3" max="10" style="width: 60px;"> max
+                        </div>
+                        <div class="security-item">
+                            <label>Password Policy:</label>
+                            <span class="status good">Strong</span>
+                        </div>
+                    </div>
+                    <button class="btn secondary" onclick="updateSecuritySettings()">Update Security</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <div id="registerCowModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Register New Cow</h3>
+                <span class="close" onclick="closeModal('registerCowModal')">&times;</span>
+            </div>
+            <form class="modal-form">
+                <div class="form-group">
+                    <label>Owner Name *</label>
+                    <input type="text" name="owner_name" required>
+                </div>
+                <div class="form-group">
+                    <label>Owner Phone *</label>
+                    <input type="tel" name="owner_phone" required>
+                </div>
+                <div class="form-group">
+                    <label>Owner Email</label>
+                    <input type="email" name="owner_email">
+                </div>
+                <div class="form-group">
+                    <label>Owner Address *</label>
+                    <textarea name="owner_address" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Breed *</label>
+                    <select name="breed" required>
+                        <option value="">Select Breed</option>
+                        <option value="Nilotic">Nilotic</option>
+                        <option value="Sanga cattle">Sanga cattle</option>
+                        <option value="Toposa-Mundari">Toposa-Mundari</option>
+                        <option value="Southern Sudan Hill Zebu">Southern Sudan Hill Zebu</option>
+                        <option value="Ankole-Watusi">Ankole-Watusi</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Color *</label>
+                    <input type="text" name="color" required>
+                </div>
+                <div class="form-group">
+                    <label>Age (months) *</label>
+                    <input type="number" name="age" min="1" max="300" required>
+                </div>
+                <div class="form-group">
+                    <label>Nose Print Images (3-5 images) *</label>
+                    <input type="file" multiple accept="image/*" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="closeModal('registerCowModal')">Cancel</button>
+                    <button type="submit" class="btn primary">Register Cow</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="addOwnerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Owner</h3>
+                <span class="close" onclick="closeModal('addOwnerModal')">&times;</span>
+            </div>
+            <form class="modal-form">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="tel" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email">
+                </div>
+                <div class="form-group">
+                    <label>Address</label>
+                    <textarea required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>ID Document</label>
+                    <input type="file" accept="image/*,application/pdf" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="closeModal('addOwnerModal')">Cancel</button>
+                    <button type="submit" class="btn primary">Add Owner</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="addAdminModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Administrator</h3>
+                <span class="close" onclick="closeModal('addAdminModal')">&times;</span>
+            </div>
+            <form class="modal-form" id="addAdminForm">
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" name="fullName" required>
+                </div>
+                <div class="form-group">
+                    <label>Email Address *</label>
+                    <input type="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number *</label>
+                    <input type="tel" name="phone" required>
+                </div>
+                <div class="form-group">
+                    <label>Location *</label>
+                    <select name="location" required>
+                        <option value="">Select Location</option>
+                        <option value="Juba">Juba</option>
+                        <option value="Wau">Wau</option>
+                        <option value="Malakal">Malakal</option>
+                        <option value="Yei">Yei</option>
+                        <option value="Torit">Torit</option>
+                        <option value="Aweil">Aweil</option>
+                        <option value="Bentiu">Bentiu</option>
+                        <option value="Bor">Bor</option>
+                        <option value="Rumbek">Rumbek</option>
+                        <option value="Kuacjok">Kuacjok</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Role *</label>
+                    <select name="role" required>
+                        <option value="">Select Role</option>
+                        <option value="location_admin">Location Admin</option>
+                        <option value="super_admin">Super Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Department</label>
+                    <input type="text" name="department" placeholder="e.g., Livestock Registration">
+                </div>
+                <div class="form-group">
+                    <label>Employee ID</label>
+                    <input type="text" name="employeeId" placeholder="Optional">
+                </div>
+                <div class="form-group">
+                    <label>Temporary Password *</label>
+                    <input type="password" name="tempPassword" required>
+                    <small>Admin will be required to change this on first login</small>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="closeModal('addAdminModal')">Cancel</button>
+                    <button type="submit" class="btn primary">Create Admin Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Details Modal -->
+    <div id="adminDetailsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Administrator Details</h3>
+                <span class="close" onclick="closeModal('adminDetailsModal')">&times;</span>
+            </div>
+            <div class="modal-body" id="adminDetailsBody">
+                <!-- Admin details will be populated by JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" onclick="closeModal('adminDetailsModal')">Close</button>
+                <button class="btn primary" onclick="editAdmin()">Edit Admin</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Modal -->
+    <div id="customModal" class="custom-modal">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h3 id="modalTitle">Title</h3>
+                <button class="custom-modal-close" onclick="closeCustomModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="custom-modal-body" id="modalBody">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            <div class="custom-modal-footer" id="modalFooter">
+                <button class="btn secondary" onclick="closeCustomModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="api-config.js"></script>
+    <script src="script.js"></script>
+    <script src="admin-management.js"></script>
+</body>
+</html>
