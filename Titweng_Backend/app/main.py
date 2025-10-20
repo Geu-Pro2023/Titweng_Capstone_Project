@@ -152,58 +152,140 @@ def send_sms(phone_number: str, message: str):
     except Exception as e:
         print(f"SMS failed: {e}")
 
-def generate_pdf_receipt(cow_tag: str, owner_name: str) -> bytes:
-    from reportlab.lib.pagesizes import A6
+def generate_pdf_receipt(cow_tag: str, owner_name: str, cow_data: dict = None) -> bytes:
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.colors import HexColor, black, white
     from reportlab.lib.units import mm
     import qrcode
+    import json
     
     buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A6)
-    width, height = A6
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
     
     # Background
     c.setFillColor(HexColor('#f8f9fa'))
     c.rect(0, 0, width, height, fill=1)
     
     # Header
-    c.setFillColor(HexColor('#3498db'))
-    c.rect(5*mm, height-35*mm, width-10*mm, 25*mm, fill=1)
+    c.setFillColor(HexColor('#2c3e50'))
+    c.rect(0, height-60*mm, width, 60*mm, fill=1)
     
-    # Title
+    # Logo/Title
     c.setFillColor(white)
-    c.setFont("Helvetica-Bold", 12)
-    title_text = "CATTLE REGISTRATION RECEIPT"
-    text_width = c.stringWidth(title_text, "Helvetica-Bold", 12)
-    c.drawString((width - text_width) / 2, height-32*mm, title_text)
+    c.setFont("Helvetica-Bold", 20)
+    title_text = "TITWENG CATTLE REGISTRATION"
+    text_width = c.stringWidth(title_text, "Helvetica-Bold", 20)
+    c.drawString((width - text_width) / 2, height-35*mm, title_text)
     
-    # Content
+    c.setFont("Helvetica-Bold", 14)
+    subtitle_text = "OFFICIAL REGISTRATION RECEIPT"
+    text_width = c.stringWidth(subtitle_text, "Helvetica-Bold", 14)
+    c.drawString((width - text_width) / 2, height-45*mm, subtitle_text)
+    
+    # Main content area
     c.setFillColor(black)
-    y_pos = height - 45*mm
-    c.setFont("Helvetica", 9)
-    c.drawString(10*mm, y_pos, f"Cow Tag: {cow_tag}")
-    y_pos -= 6*mm
-    c.drawString(10*mm, y_pos, f"Owner: {owner_name}")
-    y_pos -= 6*mm
-    c.drawString(10*mm, y_pos, f"Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    y_pos = height - 80*mm
     
-    # Generate QR code
-    qr_data = f"COW:{cow_tag}|OWNER:{owner_name}|DATE:{datetime.now().strftime('%Y%m%d')}"
-    qr = qrcode.QRCode(version=1, box_size=2, border=1)
-    qr.add_data(qr_data)
+    # Cow Information Section
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(20*mm, y_pos, "CATTLE INFORMATION")
+    c.setLineWidth(1)
+    c.line(20*mm, y_pos-2*mm, 190*mm, y_pos-2*mm)
+    y_pos -= 10*mm
+    
+    c.setFont("Helvetica", 11)
+    c.drawString(20*mm, y_pos, f"Cow Tag: {cow_tag}")
+    y_pos -= 8*mm
+    
+    if cow_data:
+        c.drawString(20*mm, y_pos, f"Breed: {cow_data.get('breed', 'Not specified')}")
+        y_pos -= 6*mm
+        c.drawString(20*mm, y_pos, f"Color: {cow_data.get('color', 'Not specified')}")
+        y_pos -= 6*mm
+        c.drawString(20*mm, y_pos, f"Age: {cow_data.get('age', 'Not specified')} years" if cow_data.get('age') else "Age: Not specified")
+        y_pos -= 6*mm
+        c.drawString(20*mm, y_pos, f"Registration Date: {cow_data.get('registration_date', datetime.now().strftime('%d/%m/%Y %H:%M'))}")
+        y_pos -= 10*mm
+    
+    # Owner Information Section
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(20*mm, y_pos, "OWNER INFORMATION")
+    c.line(20*mm, y_pos-2*mm, 190*mm, y_pos-2*mm)
+    y_pos -= 10*mm
+    
+    c.setFont("Helvetica", 11)
+    c.drawString(20*mm, y_pos, f"Full Name: {owner_name}")
+    y_pos -= 6*mm
+    
+    if cow_data and cow_data.get('owner_data'):
+        owner_data = cow_data['owner_data']
+        c.drawString(20*mm, y_pos, f"Email: {owner_data.get('email', 'Not provided')}")
+        y_pos -= 6*mm
+        c.drawString(20*mm, y_pos, f"Phone: {owner_data.get('phone', 'Not provided')}")
+        y_pos -= 6*mm
+        c.drawString(20*mm, y_pos, f"Address: {owner_data.get('address', 'Not provided')}")
+        y_pos -= 6*mm
+        if owner_data.get('national_id'):
+            c.drawString(20*mm, y_pos, f"National ID: {owner_data.get('national_id')}")
+            y_pos -= 10*mm
+    
+    # System Information
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(20*mm, y_pos, "SYSTEM INFORMATION")
+    c.line(20*mm, y_pos-2*mm, 190*mm, y_pos-2*mm)
+    y_pos -= 10*mm
+    
+    c.setFont("Helvetica", 11)
+    c.drawString(20*mm, y_pos, f"Receipt Generated: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    y_pos -= 6*mm
+    c.drawString(20*mm, y_pos, f"System: Titweng Cattle Recognition System")
+    y_pos -= 6*mm
+    c.drawString(20*mm, y_pos, f"Status: Officially Registered")
+    
+    # Generate comprehensive QR code data
+    qr_data = {
+        "system": "Titweng",
+        "cow_tag": cow_tag,
+        "owner_name": owner_name,
+        "registration_date": datetime.now().strftime('%Y-%m-%d'),
+        "verification_url": f"https://titweng.com/verify/{cow_tag}"
+    }
+    
+    if cow_data:
+        qr_data.update({
+            "breed": cow_data.get('breed', ''),
+            "color": cow_data.get('color', ''),
+            "age": cow_data.get('age', '')
+        })
+    
+    # Create QR code with JSON data
+    qr_json = json.dumps(qr_data, separators=(',', ':'))
+    qr = qrcode.QRCode(version=3, box_size=4, border=2)
+    qr.add_data(qr_json)
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white")
     
-    # Save QR temporarily
+    # Save QR temporarily and add to PDF
     import tempfile
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as qr_temp:
         qr_img.save(qr_temp.name, format='PNG')
         qr_temp_path = qr_temp.name
     
-    # Add QR to PDF
-    qr_x = width - 25*mm
-    c.drawImage(qr_temp_path, qr_x, 25*mm, width=15*mm, height=15*mm)
+    # Position QR code
+    qr_x = width - 50*mm
+    qr_y = height - 160*mm
+    c.drawImage(qr_temp_path, qr_x, qr_y, width=40*mm, height=40*mm)
     os.unlink(qr_temp_path)
+    
+    # QR Code label
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(qr_x, qr_y-8*mm, "Scan for Verification")
+    
+    # Footer
+    c.setFont("Helvetica", 8)
+    footer_text = "This is an official registration receipt. Keep it safe for verification purposes."
+    c.drawString(20*mm, 20*mm, footer_text)
     
     c.showPage()
     c.save()
@@ -443,8 +525,20 @@ async def register_cow(
         
         db.commit()
         
-        # Generate PDF receipt
-        pdf_receipt = generate_pdf_receipt(cow_tag, owner_name)
+        # Generate PDF receipt with complete cow data
+        cow_data = {
+            'breed': breed,
+            'color': color,
+            'age': cow_age,
+            'registration_date': datetime.now().strftime('%d/%m/%Y %H:%M'),
+            'owner_data': {
+                'email': owner_email,
+                'phone': owner_phone,
+                'address': owner_address,
+                'national_id': national_id
+            }
+        }
+        pdf_receipt = generate_pdf_receipt(cow_tag, owner_name, cow_data)
         
         # Save receipt
         os.makedirs("static/receipts", exist_ok=True)
@@ -977,7 +1071,19 @@ def download_receipt(cow_tag: str, db: Session = Depends(get_db)):
         if not cow.receipt_pdf_link:
             # Generate receipt if it doesn't exist
             owner_name = cow.owner.full_name if cow.owner else "Unknown Owner"
-            pdf_receipt = generate_pdf_receipt(cow_tag, owner_name)
+            cow_data = {
+                'breed': cow.breed,
+                'color': cow.color,
+                'age': cow.age,
+                'registration_date': cow.registration_date.strftime('%d/%m/%Y %H:%M') if cow.registration_date else 'Unknown',
+                'owner_data': {
+                    'email': cow.owner.email if cow.owner else '',
+                    'phone': cow.owner.phone if cow.owner else '',
+                    'address': cow.owner.address if cow.owner else '',
+                    'national_id': cow.owner.national_id if cow.owner else ''
+                }
+            }
+            pdf_receipt = generate_pdf_receipt(cow_tag, owner_name, cow_data)
             
             # Save receipt
             os.makedirs("static/receipts", exist_ok=True)
@@ -993,7 +1099,19 @@ def download_receipt(cow_tag: str, db: Session = Depends(get_db)):
         if not os.path.exists(cow.receipt_pdf_link):
             # Regenerate if file is missing
             owner_name = cow.owner.full_name if cow.owner else "Unknown Owner"
-            pdf_receipt = generate_pdf_receipt(cow_tag, owner_name)
+            cow_data = {
+                'breed': cow.breed,
+                'color': cow.color,
+                'age': cow.age,
+                'registration_date': cow.registration_date.strftime('%d/%m/%Y %H:%M') if cow.registration_date else 'Unknown',
+                'owner_data': {
+                    'email': cow.owner.email if cow.owner else '',
+                    'phone': cow.owner.phone if cow.owner else '',
+                    'address': cow.owner.address if cow.owner else '',
+                    'national_id': cow.owner.national_id if cow.owner else ''
+                }
+            }
+            pdf_receipt = generate_pdf_receipt(cow_tag, owner_name, cow_data)
             
             os.makedirs("static/receipts", exist_ok=True)
             with open(cow.receipt_pdf_link, "wb") as f:
