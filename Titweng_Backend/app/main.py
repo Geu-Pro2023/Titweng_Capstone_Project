@@ -261,7 +261,8 @@ Titweng Cattle Recognition System"""
         print("Logging in...")
         server.login(smtp_username, smtp_password)
         print("Sending message...")
-        server.send_message(msg)
+        text = msg.as_string()
+        server.sendmail(smtp_username, owner_email, text)
         server.quit()
         print("Email sent successfully!")
         
@@ -417,8 +418,8 @@ async def register_cow(
                 print(f"Skipping poor quality image: {e}")
                 continue
         
-        if len(embeddings_list) < 1:  # Reduce requirement for testing
-            raise HTTPException(status_code=400, detail="Need at least 1 high-quality image for registration")
+        if len(embeddings_list) < 1:
+            raise HTTPException(status_code=400, detail="Need at least 1 high-quality nose print image for registration. Please ensure images are clear and well-lit.")
         
         print(f"Processed {len(embeddings_list)} embeddings successfully")
         
@@ -483,8 +484,8 @@ async def register_cow(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
-# -------- Mobile & Admin Verification --------
-@app.post("/verify-cow", tags=["Mobile App", "Admin Dashboard"])
+# -------- Admin Verification --------
+@app.post("/verify-cow", tags=["Admin Dashboard"])
 async def verify_cow(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
@@ -531,7 +532,7 @@ async def verify_cow(
             }
         cow_scores = []
         for cow in all_cows:
-            if not cow.embeddings or len(cow.embeddings) < 3:
+            if not cow.embeddings or len(cow.embeddings) == 0:
                 continue
                 
             similarities = []
@@ -673,9 +674,9 @@ def get_all_cows(db: Session = Depends(get_db)):
         })
     return {"total_cows": len(result), "cows": result}
 
-@app.put("/admin/cows/{cow_id}", tags=["Admin Dashboard"])
+@app.put("/admin/cows/{cow_tag}", tags=["Admin Dashboard"])
 def update_cow(
-    cow_id: int,
+    cow_tag: str,
     owner_name: str = Form(None),
     owner_email: str = Form(None),
     owner_phone: str = Form(None),
@@ -684,12 +685,38 @@ def update_cow(
     breed: str = Form(None),
     color: str = Form(None),
     age: int = Form(None),
+    generate_new_tag: bool = Form(False),
     db: Session = Depends(get_db)
 ):
-    """Update cow and owner information"""
-    cow = db.query(Cow).filter(Cow.cow_id == cow_id).first()
+    """Update cow and owner information using cow_tag with option to generate new tag"""
+    cow = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
     if not cow:
         raise HTTPException(status_code=404, detail="Cow not found")
+    
+    old_cow_tag = cow.cow_tag
+    
+    # Generate new cow_tag if requested
+    if generate_new_tag:
+        new_cow_tag = generate_next_cow_tag(db)
+        cow.cow_tag = new_cow_tag
+        
+        # Update receipt file path
+        if cow.receipt_pdf_link:
+            old_receipt_path = cow.receipt_pdf_link
+            new_receipt_path = f"static/receipts/{new_cow_tag}_receipt.pdf"
+            
+            # Rename receipt file
+            try:
+                if os.path.exists(old_receipt_path):
+                    os.rename(old_receipt_path, new_receipt_path)
+                    cow.receipt_pdf_link = new_receipt_path
+            except Exception as e:
+                print(f"Receipt file rename warning: {e}")
+        
+        # Update QR code
+        owner_name_for_qr = cow.owner.full_name if cow.owner else "Unknown"
+        qr_data = f"COW:{new_cow_tag}|OWNER:{owner_name_for_qr}|DATE:{datetime.now().strftime('%Y%m%d')}"
+        cow.qr_code_link = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={qr_data}"
     
     # Update cow details
     if breed is not None:
@@ -713,20 +740,29 @@ def update_cow(
             cow.owner.national_id = national_id
     
     db.commit()
+    
+    response_message = f"Cow updated successfully"
+    if generate_new_tag:
+        response_message += f" with new tag {cow.cow_tag} (old tag: {old_cow_tag})"
+    else:
+        response_message += f" (tag: {cow.cow_tag})"
+    
     return {
         "success": True,
-        "message": f"Cow {cow.cow_tag} updated successfully",
+        "message": response_message,
         "cow_id": cow.cow_id,
-        "cow_tag": cow.cow_tag
+        "old_cow_tag": old_cow_tag if generate_new_tag else cow.cow_tag,
+        "new_cow_tag": cow.cow_tag,
+        "tag_changed": generate_new_tag
     }
 
-@app.delete("/admin/cows/{cow_id}", tags=["Admin Dashboard"])
+@app.delete("/admin/cows/{cow_tag}", tags=["Admin Dashboard"])
 def delete_cow(
-    cow_id: int,
+    cow_tag: str,
     db: Session = Depends(get_db)
 ):
-    """Delete cow and all associated data"""
-    cow = db.query(Cow).filter(Cow.cow_id == cow_id).first()
+    """Delete cow and all associated data using cow_tag"""
+    cow = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
     if not cow:
         raise HTTPException(status_code=404, detail="Cow not found")
     
@@ -748,7 +784,7 @@ def delete_cow(
         print(f"File cleanup warning: {e}")
     
     # Delete verification logs first (foreign key constraint)
-    db.query(VerificationLog).filter(VerificationLog.cow_id == cow_id).delete()
+    db.query(VerificationLog).filter(VerificationLog.cow_id == cow.cow_id).delete()
     
     # Database will cascade delete embeddings
     db.delete(cow)
@@ -761,6 +797,162 @@ def delete_cow(
     }
 
 # -------- Mobile App --------
+@app.post("/mobile/verify-cow", tags=["Mobile App"])
+async def mobile_verify_cow(
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db)
+):
+    """Mobile app cow verification endpoint"""
+    try:
+        print(f"Mobile verification started with {len(files)} files")
+        
+        if not files:
+            raise HTTPException(status_code=400, detail="No images provided")
+        
+        # Process images
+        query_embeddings = []
+        for f in files[:3]:
+            try:
+                contents = await f.read()
+                nparr = np.frombuffer(contents, np.uint8)
+                image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if image is None:
+                    continue
+                nose = detect_nose(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+                if nose is None:
+                    continue
+                tensor = preprocess_image(nose)
+                emb = extract_embedding(tensor)
+                query_embeddings.append(emb)
+            except Exception as e:
+                print(f"Image processing error: {e}")
+                continue
+        
+        if len(query_embeddings) == 0:
+            return {
+                "registered": False,
+                "status": "ERROR",
+                "message": "❌ No valid images for verification. Please upload clear nose print images."
+            }
+        
+        # Use average of query embeddings
+        query_emb = np.mean(query_embeddings, axis=0)
+        query_emb = query_emb / np.linalg.norm(query_emb)
+        
+        # Check against database
+        all_cows = db.query(Cow).filter(Cow.embeddings.any()).all()
+        
+        if not all_cows:
+            return {
+                "registered": False, 
+                "status": "NOT_REGISTERED",
+                "message": "❌ COW NOT REGISTERED - No cows in database"
+            }
+        
+        cow_scores = []
+        for cow in all_cows:
+            if not cow.embeddings or len(cow.embeddings) == 0:
+                continue
+                
+            similarities = []
+            for stored_emb in cow.embeddings:
+                try:
+                    stored_vector = np.array(stored_emb.embedding, dtype=np.float32)
+                    stored_norm = stored_vector / np.linalg.norm(stored_vector)
+                    cosine_sim = np.dot(query_emb, stored_norm)
+                    similarities.append(cosine_sim)
+                except Exception as e:
+                    print(f"Similarity calculation error: {e}")
+                    continue
+            
+            if similarities:
+                similarities = np.array(similarities)
+                avg_similarity = np.mean(similarities)
+                cow_scores.append((cow, avg_similarity))
+        
+        if not cow_scores:
+            return {
+                "registered": False,
+                "status": "ERROR",
+                "message": "❌ Unable to process verification. Please try again."
+            }
+        
+        # Sort by score
+        cow_scores.sort(key=lambda x: x[1], reverse=True)
+        
+        best_match = cow_scores[0][0]
+        best_score = cow_scores[0][1]
+        
+        VERIFICATION_THRESHOLD = 0.75  # Lower threshold for mobile
+        
+        if best_score >= VERIFICATION_THRESHOLD:
+            owner = best_match.owner
+            
+            # Log verification
+            verification_log = VerificationLog(
+                cow_id=best_match.cow_id,
+                similarity_score=float(best_score),
+                verified=True,
+                user_id=1
+            )
+            db.add(verification_log)
+            db.commit()
+            
+            # Send verification SMS
+            if owner and owner.phone:
+                try:
+                    send_sms(owner.phone, f"Your cow {best_match.cow_tag} was successfully verified via mobile app!")
+                except Exception as e:
+                    print(f"SMS sending error: {e}")
+            
+            return {
+                "registered": True,
+                "status": "REGISTERED",
+                "message": "✅ COW IS REGISTERED - Verification Successful",
+                "cow_details": {
+                    "cow_tag": best_match.cow_tag,
+                    "breed": best_match.breed or "Not specified",
+                    "color": best_match.color or "Not specified",
+                    "age": f"{best_match.age} years" if best_match.age else "Not specified"
+                },
+                "owner_details": {
+                    "owner_name": owner.full_name if owner else "Unknown",
+                    "owner_phone": owner.phone if owner else "Unknown"
+                },
+                "verification_info": {
+                    "similarity_score": round(float(best_score), 4),
+                    "confidence_level": "HIGH" if best_score > 0.85 else "MEDIUM"
+                }
+            }
+        else:
+            # Log failed verification
+            verification_log = VerificationLog(
+                similarity_score=float(best_score),
+                verified=False,
+                user_id=1
+            )
+            db.add(verification_log)
+            db.commit()
+            
+            return {
+                "registered": False,
+                "status": "NOT_REGISTERED", 
+                "message": "❌ COW NOT REGISTERED - This cow is not in the system",
+                "verification_info": {
+                    "highest_similarity": round(float(best_score), 4),
+                    "threshold_required": VERIFICATION_THRESHOLD
+                }
+            }
+    except Exception as e:
+        print(f"Mobile verification error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "registered": False,
+            "status": "ERROR",
+            "message": "❌ Verification failed due to technical error. Please try again."
+        }
+
 @app.post("/submit-report", tags=["Mobile App"])
 async def submit_report(
     description: str = Form(...),
@@ -809,15 +1001,45 @@ def get_image(embedding_id: int, db: Session = Depends(get_db)):
 @app.get("/download-receipt/{cow_tag}", tags=["Utility"])
 def download_receipt(cow_tag: str, db: Session = Depends(get_db)):
     """Download PDF receipt for a registered cow"""
-    cow = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
-    if not cow or not cow.receipt_pdf_link:
-        raise HTTPException(status_code=404, detail="Receipt not found")
-    
-    return FileResponse(
-        path=cow.receipt_pdf_link,
-        filename=f"{cow_tag}_receipt.pdf",
-        media_type="application/pdf"
-    )
+    try:
+        cow = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
+        if not cow:
+            raise HTTPException(status_code=404, detail="Cow not found")
+        
+        # Check if receipt exists in database
+        if not cow.receipt_pdf_link:
+            # Generate receipt if it doesn't exist
+            owner_name = cow.owner.full_name if cow.owner else "Unknown Owner"
+            pdf_receipt = generate_pdf_receipt(cow_tag, owner_name)
+            
+            # Save receipt
+            os.makedirs("static/receipts", exist_ok=True)
+            receipt_path = f"static/receipts/{cow_tag}_receipt.pdf"
+            with open(receipt_path, "wb") as f:
+                f.write(pdf_receipt)
+            
+            # Update cow record
+            cow.receipt_pdf_link = receipt_path
+            db.commit()
+        
+        # Check if file exists on filesystem
+        if not os.path.exists(cow.receipt_pdf_link):
+            # Regenerate if file is missing
+            owner_name = cow.owner.full_name if cow.owner else "Unknown Owner"
+            pdf_receipt = generate_pdf_receipt(cow_tag, owner_name)
+            
+            os.makedirs("static/receipts", exist_ok=True)
+            with open(cow.receipt_pdf_link, "wb") as f:
+                f.write(pdf_receipt)
+        
+        return FileResponse(
+            path=cow.receipt_pdf_link,
+            filename=f"{cow_tag}_receipt.pdf",
+            media_type="application/pdf"
+        )
+    except Exception as e:
+        print(f"Receipt download error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to download receipt: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
