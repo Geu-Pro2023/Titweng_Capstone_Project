@@ -685,38 +685,12 @@ def update_cow(
     breed: str = Form(None),
     color: str = Form(None),
     age: int = Form(None),
-    generate_new_tag: bool = Form(False),
     db: Session = Depends(get_db)
 ):
-    """Update cow and owner information using cow_tag with option to generate new tag"""
+    """Update cow and owner information - cow_tag remains immutable for security"""
     cow = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
     if not cow:
         raise HTTPException(status_code=404, detail="Cow not found")
-    
-    old_cow_tag = cow.cow_tag
-    
-    # Generate new cow_tag if requested
-    if generate_new_tag:
-        new_cow_tag = generate_next_cow_tag(db)
-        cow.cow_tag = new_cow_tag
-        
-        # Update receipt file path
-        if cow.receipt_pdf_link:
-            old_receipt_path = cow.receipt_pdf_link
-            new_receipt_path = f"static/receipts/{new_cow_tag}_receipt.pdf"
-            
-            # Rename receipt file
-            try:
-                if os.path.exists(old_receipt_path):
-                    os.rename(old_receipt_path, new_receipt_path)
-                    cow.receipt_pdf_link = new_receipt_path
-            except Exception as e:
-                print(f"Receipt file rename warning: {e}")
-        
-        # Update QR code
-        owner_name_for_qr = cow.owner.full_name if cow.owner else "Unknown"
-        qr_data = f"COW:{new_cow_tag}|OWNER:{owner_name_for_qr}|DATE:{datetime.now().strftime('%Y%m%d')}"
-        cow.qr_code_link = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={qr_data}"
     
     # Update cow details
     if breed is not None:
@@ -741,19 +715,12 @@ def update_cow(
     
     db.commit()
     
-    response_message = f"Cow updated successfully"
-    if generate_new_tag:
-        response_message += f" with new tag {cow.cow_tag} (old tag: {old_cow_tag})"
-    else:
-        response_message += f" (tag: {cow.cow_tag})"
-    
     return {
         "success": True,
-        "message": response_message,
+        "message": f"Cow {cow_tag} updated successfully",
         "cow_id": cow.cow_id,
-        "old_cow_tag": old_cow_tag if generate_new_tag else cow.cow_tag,
-        "new_cow_tag": cow.cow_tag,
-        "tag_changed": generate_new_tag
+        "cow_tag": cow.cow_tag,
+        "note": "cow_tag remains unchanged for security and traceability"
     }
 
 @app.delete("/admin/cows/{cow_tag}", tags=["Admin Dashboard"])
