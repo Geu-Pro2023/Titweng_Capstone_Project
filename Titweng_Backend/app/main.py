@@ -153,115 +153,165 @@ def send_sms(phone_number: str, message: str):
         print(f"SMS failed: {e}")
 
 def generate_pdf_receipt(cow_tag: str, owner_name: str, cow_data: dict = None) -> bytes:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.colors import HexColor, black, white
+    from reportlab.lib.pagesizes import A5
+    from reportlab.lib.colors import HexColor, black, white, grey
     from reportlab.lib.units import mm
     import qrcode
     import json
+    import hashlib
     
     buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
+    c = canvas.Canvas(buffer, pagesize=A5)
+    width, height = A5
     
-    # Background
+    # Generate unique receipt number based on cow_tag and timestamp
+    receipt_hash = hashlib.md5(f"{cow_tag}{datetime.now().isoformat()}".encode()).hexdigest()[:8].upper()
+    receipt_number = f"TW-{receipt_hash}"
+    
+    # Professional page border with rounded corners effect
+    c.setStrokeColor(HexColor('#2c3e50'))
+    c.setLineWidth(3)
+    c.rect(5*mm, 5*mm, width-10*mm, height-10*mm)
+    
+    # Inner decorative border
+    c.setStrokeColor(HexColor('#3498db'))
+    c.setLineWidth(1)
+    c.rect(8*mm, 8*mm, width-16*mm, height-16*mm)
+    
+    # Background gradient effect
     c.setFillColor(HexColor('#f8f9fa'))
-    c.rect(0, 0, width, height, fill=1)
+    c.rect(10*mm, 10*mm, width-20*mm, height-20*mm, fill=1)
     
-    # Header
+    # Professional header with centered logo area
     c.setFillColor(HexColor('#2c3e50'))
-    c.rect(0, height-60*mm, width, 60*mm, fill=1)
+    c.rect(10*mm, height-50*mm, width-20*mm, 35*mm, fill=1)
     
-    # Logo/Title
+    # Centered Logo/Company Name
     c.setFillColor(white)
-    c.setFont("Helvetica-Bold", 20)
-    title_text = "TITWENG CATTLE REGISTRATION"
-    text_width = c.stringWidth(title_text, "Helvetica-Bold", 20)
-    c.drawString((width - text_width) / 2, height-35*mm, title_text)
-    
     c.setFont("Helvetica-Bold", 14)
+    title_text = "TITWENG CATTLE SYSTEM"
+    text_width = c.stringWidth(title_text, "Helvetica-Bold", 14)
+    c.drawString((width - text_width) / 2, height-25*mm, title_text)
+    
+    c.setFont("Helvetica-Bold", 10)
     subtitle_text = "OFFICIAL REGISTRATION RECEIPT"
-    text_width = c.stringWidth(subtitle_text, "Helvetica-Bold", 14)
-    c.drawString((width - text_width) / 2, height-45*mm, subtitle_text)
+    text_width = c.stringWidth(subtitle_text, "Helvetica-Bold", 10)
+    c.drawString((width - text_width) / 2, height-35*mm, subtitle_text)
+    
+    # Receipt number (top right)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(width-45*mm, height-45*mm, f"Receipt #: {receipt_number}")
     
     # Main content area
     c.setFillColor(black)
-    y_pos = height - 80*mm
+    y_pos = height - 60*mm
     
-    # Cow Information Section
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(20*mm, y_pos, "CATTLE INFORMATION")
-    c.setLineWidth(1)
-    c.line(20*mm, y_pos-2*mm, 190*mm, y_pos-2*mm)
-    y_pos -= 10*mm
-    
-    c.setFont("Helvetica", 11)
-    c.drawString(20*mm, y_pos, f"Cow Tag: {cow_tag}")
+    # Registration timestamp
+    c.setFont("Helvetica", 8)
+    reg_date = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+    c.drawString(15*mm, y_pos, f"Registration Date: {reg_date}")
     y_pos -= 8*mm
     
-    if cow_data:
-        c.drawString(20*mm, y_pos, f"Breed: {cow_data.get('breed', 'Not specified')}")
-        y_pos -= 6*mm
-        c.drawString(20*mm, y_pos, f"Color: {cow_data.get('color', 'Not specified')}")
-        y_pos -= 6*mm
-        c.drawString(20*mm, y_pos, f"Age: {cow_data.get('age', 'Not specified')} years" if cow_data.get('age') else "Age: Not specified")
-        y_pos -= 6*mm
-        c.drawString(20*mm, y_pos, f"Registration Date: {cow_data.get('registration_date', datetime.now().strftime('%d/%m/%Y %H:%M'))}")
-        y_pos -= 10*mm
+    # Cattle Information Section
+    c.setFillColor(HexColor('#3498db'))
+    c.rect(15*mm, y_pos-2*mm, width-30*mm, 6*mm, fill=1)
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(17*mm, y_pos, "CATTLE INFORMATION")
     
-    # Owner Information Section
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(20*mm, y_pos, "OWNER INFORMATION")
-    c.line(20*mm, y_pos-2*mm, 190*mm, y_pos-2*mm)
+    c.setFillColor(black)
     y_pos -= 10*mm
     
-    c.setFont("Helvetica", 11)
-    c.drawString(20*mm, y_pos, f"Full Name: {owner_name}")
-    y_pos -= 6*mm
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(17*mm, y_pos, f"Cow Tag: {cow_tag}")
+    y_pos -= 5*mm
+    
+    if cow_data:
+        c.setFont("Helvetica", 7)
+        c.drawString(17*mm, y_pos, f"Breed: {cow_data.get('breed', 'Not specified')}")
+        y_pos -= 4*mm
+        c.drawString(17*mm, y_pos, f"Color: {cow_data.get('color', 'Not specified')}")
+        y_pos -= 4*mm
+        age_text = f"{cow_data.get('age')} years" if cow_data.get('age') else "Not specified"
+        c.drawString(17*mm, y_pos, f"Age: {age_text}")
+        y_pos -= 6*mm
+    
+    # Owner Information Section
+    c.setFillColor(HexColor('#27ae60'))
+    c.rect(15*mm, y_pos-2*mm, width-30*mm, 6*mm, fill=1)
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(17*mm, y_pos, "OWNER INFORMATION")
+    
+    c.setFillColor(black)
+    y_pos -= 10*mm
+    
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(17*mm, y_pos, f"Full Name: {owner_name}")
+    y_pos -= 5*mm
     
     if cow_data and cow_data.get('owner_data'):
         owner_data = cow_data['owner_data']
-        c.drawString(20*mm, y_pos, f"Email: {owner_data.get('email', 'Not provided')}")
-        y_pos -= 6*mm
-        c.drawString(20*mm, y_pos, f"Phone: {owner_data.get('phone', 'Not provided')}")
-        y_pos -= 6*mm
-        c.drawString(20*mm, y_pos, f"Address: {owner_data.get('address', 'Not provided')}")
-        y_pos -= 6*mm
+        c.setFont("Helvetica", 7)
+        if owner_data.get('phone'):
+            c.drawString(17*mm, y_pos, f"Phone: {owner_data.get('phone')}")
+            y_pos -= 4*mm
+        if owner_data.get('email'):
+            email = owner_data.get('email', '')
+            display_email = email[:25] + '...' if len(email) > 25 else email
+            c.drawString(17*mm, y_pos, f"Email: {display_email}")
+            y_pos -= 4*mm
+        if owner_data.get('address'):
+            address = owner_data.get('address', '')
+            display_address = address[:30] + '...' if len(address) > 30 else address
+            c.drawString(17*mm, y_pos, f"Address: {display_address}")
+            y_pos -= 4*mm
         if owner_data.get('national_id'):
-            c.drawString(20*mm, y_pos, f"National ID: {owner_data.get('national_id')}")
-            y_pos -= 10*mm
+            c.drawString(17*mm, y_pos, f"National ID: {owner_data.get('national_id')}")
+            y_pos -= 6*mm
     
-    # System Information
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(20*mm, y_pos, "SYSTEM INFORMATION")
-    c.line(20*mm, y_pos-2*mm, 190*mm, y_pos-2*mm)
+    # System Information Section
+    c.setFillColor(HexColor('#e74c3c'))
+    c.rect(15*mm, y_pos-2*mm, width-30*mm, 6*mm, fill=1)
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(17*mm, y_pos, "SYSTEM INFORMATION")
+    
+    c.setFillColor(black)
     y_pos -= 10*mm
     
-    c.setFont("Helvetica", 11)
-    c.drawString(20*mm, y_pos, f"Receipt Generated: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-    y_pos -= 6*mm
-    c.drawString(20*mm, y_pos, f"System: Titweng Cattle Recognition System")
-    y_pos -= 6*mm
-    c.drawString(20*mm, y_pos, f"Status: Officially Registered")
+    c.setFont("Helvetica", 7)
+    c.drawString(17*mm, y_pos, f"System: Titweng Cattle Recognition System")
+    y_pos -= 4*mm
+    c.drawString(17*mm, y_pos, f"Status: OFFICIALLY REGISTERED")
+    y_pos -= 4*mm
+    c.drawString(17*mm, y_pos, f"Receipt Generated: {reg_date}")
     
-    # Generate comprehensive QR code data
+    # Generate comprehensive QR code with all data including receipt number
     qr_data = {
         "system": "Titweng",
+        "receipt_number": receipt_number,
         "cow_tag": cow_tag,
         "owner_name": owner_name,
         "registration_date": datetime.now().strftime('%Y-%m-%d'),
-        "verification_url": f"https://titweng.com/verify/{cow_tag}"
+        "verification_url": f"https://titweng.com/verify/{cow_tag}",
+        "receipt_url": f"https://titweng.com/receipt/{receipt_number}"
     }
     
     if cow_data:
         qr_data.update({
             "breed": cow_data.get('breed', ''),
             "color": cow_data.get('color', ''),
-            "age": cow_data.get('age', '')
+            "age": str(cow_data.get('age', '')) if cow_data.get('age') else '',
+            "owner_phone": cow_data.get('owner_data', {}).get('phone', ''),
+            "owner_email": cow_data.get('owner_data', {}).get('email', ''),
+            "owner_address": cow_data.get('owner_data', {}).get('address', ''),
+            "national_id": cow_data.get('owner_data', {}).get('national_id', '')
         })
     
-    # Create QR code with JSON data
+    # Create professional QR code with complete data
     qr_json = json.dumps(qr_data, separators=(',', ':'))
-    qr = qrcode.QRCode(version=3, box_size=4, border=2)
+    qr = qrcode.QRCode(version=3, box_size=3, border=2)
     qr.add_data(qr_json)
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white")
@@ -272,20 +322,42 @@ def generate_pdf_receipt(cow_tag: str, owner_name: str, cow_data: dict = None) -
         qr_img.save(qr_temp.name, format='PNG')
         qr_temp_path = qr_temp.name
     
-    # Position QR code
-    qr_x = width - 50*mm
-    qr_y = height - 160*mm
-    c.drawImage(qr_temp_path, qr_x, qr_y, width=40*mm, height=40*mm)
+    # Position QR code with border
+    qr_x = width - 35*mm
+    qr_y = 35*mm
+    
+    # QR code background
+    c.setFillColor(white)
+    c.setStrokeColor(HexColor('#2c3e50'))
+    c.setLineWidth(1)
+    c.rect(qr_x-2*mm, qr_y-2*mm, 24*mm, 24*mm, fill=1, stroke=1)
+    
+    c.drawImage(qr_temp_path, qr_x, qr_y, width=20*mm, height=20*mm)
     os.unlink(qr_temp_path)
     
     # QR Code label
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(qr_x, qr_y-8*mm, "Scan for Verification")
+    c.setFont("Helvetica-Bold", 6)
+    c.drawString(qr_x+3*mm, qr_y-6*mm, "Scan to Verify")
     
-    # Footer
-    c.setFont("Helvetica", 8)
-    footer_text = "This is an official registration receipt. Keep it safe for verification purposes."
-    c.drawString(20*mm, 20*mm, footer_text)
+    # Professional signature area
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(17*mm, 35*mm, "Authorized Signature:")
+    c.setLineWidth(1)
+    c.setStrokeColor(black)
+    c.line(17*mm, 30*mm, 80*mm, 30*mm)
+    
+    c.setFont("Helvetica", 6)
+    c.drawString(17*mm, 25*mm, "Titweng System Administrator")
+    
+    # Professional footer with security features
+    c.setFillColor(HexColor('#95a5a6'))
+    c.rect(10*mm, 10*mm, width-20*mm, 8*mm, fill=1)
+    
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 6)
+    footer_text = "OFFICIAL TITWENG CATTLE REGISTRATION RECEIPT - KEEP SAFE FOR VERIFICATION"
+    text_width = c.stringWidth(footer_text, "Helvetica-Bold", 6)
+    c.drawString((width - text_width) / 2, 13*mm, footer_text)
     
     c.showPage()
     c.save()
