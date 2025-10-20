@@ -183,28 +183,35 @@ def generate_pdf_receipt(cow_tag: str, owner_name: str, cow_data: dict = None) -
     c.rect(10*mm, 10*mm, width-20*mm, height-20*mm, fill=1)
     
     # Professional header with centered logo area
-    c.setFillColor(HexColor('#2c3e50'))
-    c.rect(10*mm, height-50*mm, width-20*mm, 35*mm, fill=1)
+    c.setFillColor(HexColor('#074a42'))
+    c.rect(10*mm, height-55*mm, width-20*mm, 40*mm, fill=1)
     
-    # Centered Logo/Company Name
+    # Add centered logo
+    logo_path = "static/assets/logo.png"
+    if os.path.exists(logo_path):
+        logo_x = (width - 15*mm) / 2
+        logo_y = height-30*mm
+        c.drawImage(logo_path, logo_x, logo_y, width=15*mm, height=15*mm)
+    
+    # Centered Company Name
     c.setFillColor(white)
     c.setFont("Helvetica-Bold", 14)
     title_text = "TITWENG CATTLE SYSTEM"
     text_width = c.stringWidth(title_text, "Helvetica-Bold", 14)
-    c.drawString((width - text_width) / 2, height-25*mm, title_text)
+    c.drawString((width - text_width) / 2, height-40*mm, title_text)
     
     c.setFont("Helvetica-Bold", 10)
     subtitle_text = "OFFICIAL REGISTRATION RECEIPT"
     text_width = c.stringWidth(subtitle_text, "Helvetica-Bold", 10)
-    c.drawString((width - text_width) / 2, height-35*mm, subtitle_text)
+    c.drawString((width - text_width) / 2, height-50*mm, subtitle_text)
     
     # Receipt number (top right)
     c.setFont("Helvetica-Bold", 8)
-    c.drawString(width-45*mm, height-45*mm, f"Receipt #: {receipt_number}")
+    c.drawString(width-45*mm, height-50*mm, f"Receipt #: {receipt_number}")
     
     # Main content area
     c.setFillColor(black)
-    y_pos = height - 60*mm
+    y_pos = height - 65*mm
     
     # Registration timestamp
     c.setFont("Helvetica", 8)
@@ -337,14 +344,26 @@ def generate_pdf_receipt(cow_tag: str, owner_name: str, cow_data: dict = None) -
     
     # QR Code label
     c.setFont("Helvetica-Bold", 6)
-    c.drawString(qr_x+3*mm, qr_y-6*mm, "Scan to Verify")
+    c.drawString(qr_x+3*mm, qr_y-6*mm, "Scan to verify")
     
-    # Professional signature area
-    c.setFont("Helvetica-Bold", 8)
-    c.drawString(17*mm, 35*mm, "Authorized Signature:")
+    # Professional signature area with signature above line
+    # Add signature image placeholder (you can replace with actual signature image)
+    signature_x = 17*mm
+    signature_y = 40*mm
+    
+    # Signature image area (placeholder - replace with actual signature)
+    c.setStrokeColor(HexColor('#cccccc'))
+    c.setLineWidth(0.5)
+    c.rect(signature_x, signature_y, 40*mm, 10*mm, stroke=1)
+    
+    # Signature line
     c.setLineWidth(1)
     c.setStrokeColor(black)
-    c.line(17*mm, 30*mm, 80*mm, 30*mm)
+    c.line(17*mm, 35*mm, 80*mm, 35*mm)
+    
+    # "Registrar Signature" text below the line
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(17*mm, 30*mm, "Registrar Signature")
     
     c.setFont("Helvetica", 6)
     c.drawString(17*mm, 25*mm, "Titweng System Administrator")
