@@ -1077,37 +1077,58 @@ async def verify_cattle(
         if not files:
             raise HTTPException(status_code=400, detail="No images provided for verification")
         
-        # Process verification images
+        # Process verification images with enhanced error handling
         query_embeddings = []
+        processing_errors = []
         
         for file_index, uploaded_file in enumerate(files[:3]):  # Maximum 3 images for verification
             try:
+                print(f"INFO: Processing verification image {file_index + 1}: {uploaded_file.filename}")
+                
                 # Read and decode image
                 image_content = await uploaded_file.read()
                 image_array = np.frombuffer(image_content, np.uint8)
                 decoded_image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
                 
                 if decoded_image is None:
+                    processing_errors.append(f"Image {file_index + 1}: Could not decode")
                     continue
                 
                 # Validate and preprocess image
                 rgb_image = cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB)
-                validated_image = validate_nose_print_image(rgb_image)
                 
-                if validated_image is None:
+                try:
+                    validated_image = validate_nose_print_image(rgb_image)
+                except ValueError as validation_error:
+                    processing_errors.append(f"Image {file_index + 1}: {str(validation_error)}")
                     continue
                 
-                # Extract embedding
+                # Extract embedding with validation
                 processed_tensor = preprocess_image_for_model(validated_image)
                 embedding_vector = extract_nose_print_embedding(processed_tensor)
-                query_embeddings.append(embedding_vector)
+                
+                # Validate embedding quality
+                embedding_magnitude = np.linalg.norm(embedding_vector)
+                if 0.3 <= embedding_magnitude <= 1.8:  # Valid range for nose prints
+                    query_embeddings.append(embedding_vector)
+                    print(f"SUCCESS: Valid embedding extracted from image {file_index + 1} (magnitude: {embedding_magnitude:.3f})")
+                else:
+                    processing_errors.append(f"Image {file_index + 1}: Invalid embedding magnitude {embedding_magnitude:.3f}")
                 
             except Exception as processing_error:
-                print(f"WARNING: Failed to process verification image {file_index + 1} - {str(processing_error)}")
+                error_msg = f"Image {file_index + 1}: {str(processing_error)}"
+                processing_errors.append(error_msg)
+                print(f"WARNING: {error_msg}")
                 continue
         
         if len(query_embeddings) == 0:
-            raise HTTPException(status_code=400, detail="No valid images for verification")
+            error_details = "; ".join(processing_errors) if processing_errors else "Unknown processing errors"
+            raise HTTPException(
+                status_code=400, 
+                detail=f"No valid nose print images for verification. Issues found: {error_details}"
+            )
+        
+        print(f"INFO: Successfully processed {len(query_embeddings)} images for verification")
         
         # Create average query embedding
         average_query_embedding = np.mean(query_embeddings, axis=0)
@@ -1123,29 +1144,67 @@ async def verify_cattle(
                 "message": "❌ COW NOT REGISTERED - No cattle in database"
             }
         
-        # Calculate similarity scores
+        # Calculate similarity scores with comprehensive logging
         cattle_similarity_scores = []
+        total_comparisons = 0
+        
+        print(f"INFO: Comparing against {len(registered_cattle)} registered cattle")
         
         for cattle in registered_cattle:
             if not cattle.embeddings:
+                print(f"WARNING: Cattle {cattle.cow_tag} has no embeddings - skipping")
                 continue
             
             similarity_scores = []
-            for stored_embedding in cattle.embeddings:
+            print(f"INFO: Comparing against cattle {cattle.cow_tag} with {len(cattle.embeddings)} embeddings")
+            
+            for embedding_idx, stored_embedding in enumerate(cattle.embeddings):
                 try:
+                    # Validate stored embedding
+                    if not stored_embedding.embedding:
+                        print(f"WARNING: Empty embedding for {cattle.cow_tag} embedding {embedding_idx + 1}")
+                        continue
+                    
                     stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
-                    normalized_stored_vector = stored_vector / np.linalg.norm(stored_vector)
+                    
+                    # Validate stored vector
+                    if stored_vector.size != 256:
+                        print(f"WARNING: Invalid embedding size {stored_vector.size} for {cattle.cow_tag}")
+                        continue
+                    
+                    # Normalize and calculate similarity
+                    stored_magnitude = np.linalg.norm(stored_vector)
+                    if stored_magnitude == 0:
+                        print(f"WARNING: Zero magnitude embedding for {cattle.cow_tag}")
+                        continue
+                    
+                    normalized_stored_vector = stored_vector / stored_magnitude
                     cosine_similarity = np.dot(normalized_query_embedding, normalized_stored_vector)
+                    
+                    # Clamp similarity to valid range [-1, 1]
+                    cosine_similarity = np.clip(cosine_similarity, -1.0, 1.0)
+                    
                     similarity_scores.append(cosine_similarity)
+                    total_comparisons += 1
+                    
+                    print(f"DEBUG: {cattle.cow_tag} embedding {embedding_idx + 1}: similarity = {cosine_similarity:.4f}")
+                    
                 except Exception as similarity_error:
-                    print(f"WARNING: Similarity calculation error - {str(similarity_error)}")
+                    print(f"ERROR: Similarity calculation failed for {cattle.cow_tag} embedding {embedding_idx + 1}: {str(similarity_error)}")
                     continue
             
             if similarity_scores:
-                # Use average of top 3 similarities
+                # Use average of top 3 similarities for robustness
                 top_similarities = sorted(similarity_scores, reverse=True)[:3]
                 average_similarity = np.mean(top_similarities)
+                max_similarity = max(similarity_scores)
+                
                 cattle_similarity_scores.append((cattle, average_similarity))
+                print(f"INFO: {cattle.cow_tag} - Average: {average_similarity:.4f}, Max: {max_similarity:.4f} (from {len(similarity_scores)} embeddings)")
+            else:
+                print(f"WARNING: No valid similarities calculated for {cattle.cow_tag}")
+        
+        print(f"INFO: Completed {total_comparisons} embedding comparisons across {len(cattle_similarity_scores)} cattle")
         
         if not cattle_similarity_scores:
             return {
@@ -1158,10 +1217,30 @@ async def verify_cattle(
         cattle_similarity_scores.sort(key=lambda x: x[1], reverse=True)
         best_match_cattle, best_similarity_score = cattle_similarity_scores[0]
         
-        # Verification threshold
+        # Dynamic verification threshold based on confidence
         VERIFICATION_THRESHOLD = 0.82
+        BACKUP_THRESHOLD = 0.75  # Lower threshold for backup verification
+        
+        # Enhanced verification with multiple checks
+        is_verified = False
+        confidence_level = "LOW"
         
         if best_similarity_score >= VERIFICATION_THRESHOLD:
+            is_verified = True
+            confidence_level = "HIGH" if best_similarity_score > 0.85 else "MEDIUM"
+        elif best_similarity_score >= BACKUP_THRESHOLD:
+            # Secondary verification - check if significantly better than second best
+            if len(cattle_similarity_scores) > 1:
+                second_best_score = cattle_similarity_scores[1][1]
+                score_difference = best_similarity_score - second_best_score
+                
+                # If the best match is significantly better than second best
+                if score_difference > 0.15:  # 15% difference threshold
+                    is_verified = True
+                    confidence_level = "MEDIUM"
+                    print(f"INFO: Secondary verification passed - score difference: {score_difference:.3f}")
+        
+        if is_verified:
             # Successful verification
             owner = best_match_cattle.owner
             
@@ -1200,7 +1279,9 @@ async def verify_cattle(
                 },
                 "verification_info": {
                     "similarity_score": round(float(best_similarity_score), 4),
-                    "confidence_level": "HIGH" if best_similarity_score > 0.85 else "MEDIUM"
+                    "confidence_level": confidence_level,
+                    "threshold_used": VERIFICATION_THRESHOLD,
+                    "verification_method": "Primary" if best_similarity_score >= VERIFICATION_THRESHOLD else "Secondary"
                 }
             }
         else:
