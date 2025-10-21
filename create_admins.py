@@ -10,51 +10,22 @@ import json
 # Your Render backend URL
 API_BASE = "https://titweng-capstone-project.onrender.com"
 
-# Admin accounts to create
-ADMINS = [
-    {
-        "username": "supervisor",
-        "email": "supervisor@titweng.com",
-        "password": "supervisor123",
-        "full_name": "Project Supervisor",
-        "role": "super_admin"
-    },
-    {
-        "username": "operator1",
-        "email": "operator1@titweng.com", 
-        "password": "operator123",
-        "full_name": "Field Operator 1",
-        "role": "admin"
-    },
-    {
-        "username": "operator2",
-        "email": "operator2@titweng.com",
-        "password": "operator123", 
-        "full_name": "Field Operator 2",
-        "role": "admin"
-    }
-]
-
-def create_admin(admin_data):
-    try:
-        response = requests.post(f"{API_BASE}/auth/create-admin", json=admin_data)
-        if response.status_code == 200:
-            print(f"✅ Created admin: {admin_data['username']} ({admin_data['full_name']})")
-        else:
-            print(f"❌ Failed to create {admin_data['username']}: {response.text}")
-    except Exception as e:
-        print(f"❌ Error creating {admin_data['username']}: {e}")
+# Single admin for capstone demonstration
+# Additional admins can be created through the dashboard as needed
+print("ℹ️  For capstone project: Using single admin account")
+print("ℹ️  Additional admins can be created through dashboard when needed")
+print("ℹ️  Login credentials: titweng / titweng")
+print("")
+print("🚀 Capstone project ready with simplified admin setup!")
 
 if __name__ == "__main__":
-    print("🔐 Creating additional admin accounts for Titweng Capstone Project...")
+    print("🎓 Titweng Capstone Project - Single Admin Setup")
     print(f"📡 Backend URL: {API_BASE}")
     print()
-    
-    for admin in ADMINS:
-        create_admin(admin)
-    
+    print("📋 Login Credentials:")
+    print("Username: titweng")
+    print("Password: titweng")
     print()
-    print("📋 Admin Login Credentials:")
-    print("Default: admin / admin123")
-    for admin in ADMINS:
-        print(f"{admin['full_name']}: {admin['username']} / {admin['password']}")
+    print("ℹ️  This capstone project uses a single admin account for demonstration.")
+    print("ℹ️  In production, additional admins would be created based on organizational needs.")
+    print("ℹ️  The dashboard includes functionality to create additional admins when required.")
