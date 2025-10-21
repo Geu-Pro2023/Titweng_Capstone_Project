@@ -509,6 +509,7 @@ async function populateData() {
         await populateRecentTables();
         await populateOwnerGrid();
         populateUsersTable();
+    await populateAdminTable();
     } catch (error) {
         console.error('Error loading dashboard data:', error);
         showErrorMessage('Failed to load dashboard data. Please refresh the page.');
@@ -772,6 +773,46 @@ function populateUsersTable() {
     const tableBody = document.getElementById('usersTableBody');
     if (tableBody) {
         tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Mobile app user data not available in current API</td></tr>';
+    }
+}
+
+async function populateAdminTable() {
+    const tableBody = document.getElementById('adminTableBody');
+    if (!tableBody) return;
+    
+    try {
+        // For now, show sample data since we don't have admin list endpoint
+        const sampleAdmins = [
+            {
+                admin_id: 1,
+                full_name: 'System Administrator',
+                email: 'admin@titweng.com',
+                role: 'super_admin',
+                location: 'Juba',
+                is_active: true,
+                last_login: new Date().toLocaleDateString()
+            }
+        ];
+        
+        tableBody.innerHTML = sampleAdmins.map(admin => `
+            <tr>
+                <td>ADM${admin.admin_id.toString().padStart(3, '0')}</td>
+                <td>${admin.full_name}</td>
+                <td>${admin.email}</td>
+                <td>${admin.location || 'Not specified'}</td>
+                <td><span class="status ${admin.role}">${admin.role.replace('_', ' ')}</span></td>
+                <td><span class="status ${admin.is_active ? 'active' : 'inactive'}">${admin.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td>${admin.last_login}</td>
+                <td>
+                    <button class="btn tertiary" onclick="viewAdminDetails('${admin.admin_id}')">View</button>
+                    <button class="btn secondary" onclick="editAdminAccount('${admin.admin_id}')">Edit</button>
+                </td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading admin table:', error);
+        tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: red;">Error loading admin data</td></tr>';
     }
 }
 
@@ -2234,12 +2275,39 @@ async function handleModalFormSubmission(form) {
     try {
         if (modalId === 'registerCowModal') {
             await handleQuickCowRegistration(form);
+        } else if (modalId === 'addAdminModal') {
+            await handleAdminCreation(form);
         } else {
             showSuccessMessage('Form submitted successfully!');
         }
         modal.style.display = 'none';
     } catch (error) {
         showErrorMessage('Failed to submit form. Please try again.');
+    }
+}
+
+async function handleAdminCreation(form) {
+    const formData = new FormData(form);
+    const adminData = {
+        username: formData.get('email').split('@')[0], // Use email prefix as username
+        email: formData.get('email'),
+        password: formData.get('tempPassword'),
+        full_name: formData.get('fullName'),
+        role: formData.get('role') === 'super_admin' ? 'super_admin' : 'admin'
+    };
+    
+    const response = await fetch(`${titwengAPI.baseURL}/auth/create-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adminData)
+    });
+    
+    if (response.ok) {
+        showSuccessMessage(`Admin ${adminData.full_name} created successfully!`);
+        await populateAdminTable();
+    } else {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create admin');
     }
 }
 
