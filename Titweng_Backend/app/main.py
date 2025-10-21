@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 import torchvision.models as models
 import torchvision.transforms as T
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 
@@ -32,6 +32,13 @@ load_dotenv()
 from app.database import (
     Owner, Cow, User, Embedding, Report, VerificationLog,
     get_db, SessionLocal
+)
+
+# Import authentication
+from app.auth import (
+    Admin, LoginRequest, LoginResponse, AdminCreate,
+    hash_password, verify_password, create_access_token,
+    get_current_admin, create_default_admin
 )
 
 # ================================
@@ -488,6 +495,11 @@ async def lifespan(app: FastAPI):
         # Create all tables
         Base.metadata.create_all(bind=engine)
         print("Database tables created successfully")
+        
+        # Create default admin
+        db = SessionLocal()
+        create_default_admin(db)
+        db.close()
             
     except Exception as e:
         print(f"Error creating tables: {e}")
@@ -512,6 +524,107 @@ app.add_middleware(
 @app.get("/", tags=["Status"])
 def root():
     return {"message": "Titweng Cattle Recognition API - No Authentication Required", "status": "live"}
+
+# ================================
+# AUTHENTICATION ENDPOINTS
+# ================================
+
+@app.post("/auth/login", response_model=LoginResponse, tags=["Authentication"])
+def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    """Admin login endpoint"""
+    try:
+        # Find admin by username
+        admin = db.query(Admin).filter(Admin.username == login_data.username).first()
+        
+        if not admin or not verify_password(login_data.password, admin.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password"
+            )
+        
+        if not admin.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account is disabled"
+            )
+        
+        # Update last login
+        admin.last_login = datetime.utcnow()
+        db.commit()
+        
+        # Create access token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": admin.username}, expires_delta=access_token_expires
+        )
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": admin.admin_id,
+                "username": admin.username,
+                "email": admin.email,
+                "full_name": admin.full_name,
+                "role": admin.role
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+@app.get("/auth/verify", tags=["Authentication"])
+def verify_token_endpoint(current_admin: Admin = Depends(get_current_admin)):
+    """Verify JWT token"""
+    return {
+        "valid": True,
+        "user": {
+            "id": current_admin.admin_id,
+            "username": current_admin.username,
+            "email": current_admin.email,
+            "full_name": current_admin.full_name,
+            "role": current_admin.role
+        }
+    }
+
+@app.post("/auth/create-admin", tags=["Authentication"])
+def create_admin(admin_data: AdminCreate, db: Session = Depends(get_db)):
+    """Create new admin (for setup only)"""
+    try:
+        # Check if admin already exists
+        existing_admin = db.query(Admin).filter(
+            (Admin.username == admin_data.username) | (Admin.email == admin_data.email)
+        ).first()
+        
+        if existing_admin:
+            raise HTTPException(status_code=400, detail="Admin already exists")
+        
+        # Create new admin
+        new_admin = Admin(
+            username=admin_data.username,
+            email=admin_data.email,
+            password_hash=hash_password(admin_data.password),
+            full_name=admin_data.full_name,
+            role=admin_data.role
+        )
+        
+        db.add(new_admin)
+        db.commit()
+        db.refresh(new_admin)
+        
+        return {
+            "success": True,
+            "message": "Admin created successfully",
+            "admin_id": new_admin.admin_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Create admin error: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create admin")
 
 @app.post("/test-simple", tags=["Status"])
 def test_simple(test_data: str = Form(...), db: Session = Depends(get_db)):

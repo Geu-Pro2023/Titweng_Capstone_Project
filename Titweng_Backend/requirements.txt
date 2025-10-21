@@ -6,6 +6,7 @@ psycopg2-binary
 pgvector
 passlib[bcrypt]
 python-jose[cryptography]
+PyJWT
 python-dotenv
 twilio
 reportlab
