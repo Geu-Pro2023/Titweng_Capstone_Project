@@ -448,10 +448,14 @@ def send_email_with_receipt(owner_email: str, owner_name: str, cow_tag: str, pdf
         
         # Check if email configuration is available
         if not all([smtp_server, smtp_username, smtp_password]):
-            print("WARNING: Email configuration missing - email notifications disabled")
+            print("❌ WARNING: Email configuration missing - email notifications disabled")
+            print(f"   SMTP Server: {smtp_server}")
+            print(f"   SMTP Username: {smtp_username}")
+            print(f"   SMTP Password: {'Present' if smtp_password else 'Missing'}")
             return False
         
-        print(f"INFO: Sending email to {owner_email} using {smtp_username}")
+        print(f"📧 INFO: Sending registration email to {owner_email} using {smtp_username}")
+        print(f"📧 Subject: Cattle Registration Confirmation - {cow_tag}")
         
         # Create email message
         email_message = MIMEMultipart()
@@ -504,11 +508,12 @@ Titweng Cattle Recognition System
                 email_text = email_message.as_string()
                 server.sendmail(smtp_username, owner_email, email_text)
         
-        print(f"SUCCESS: Email sent to {owner_email}")
+        print(f"✅ SUCCESS: Registration email with PDF receipt sent to {owner_email}")
         return True
         
     except Exception as email_error:
-        print(f"ERROR: Failed to send email to {owner_email} - {str(email_error)}")
+        print(f"❌ ERROR: Failed to send email to {owner_email}")
+        print(f"   Error details: {str(email_error)}")
         return False
 
 def generate_unique_cow_tag(database_session: Session) -> str:
@@ -1127,16 +1132,18 @@ async def register_cattle(
             sms_sent = False
             print("INFO: SMS disabled for registration - only sent during verification")
             
-            # Send email with better error handling
+            # Send email with receipt automatically
             email_sent = False
             try:
+                print(f"INFO: Attempting to send email to {owner_email}")
                 email_sent = send_email_with_receipt(owner_email, owner_name, cattle_tag, pdf_receipt)
                 if email_sent:
-                    print(f"SUCCESS: Email sent to {owner_email}")
+                    print(f"✅ SUCCESS: Registration email with receipt sent to {owner_email}")
                 else:
-                    print(f"WARNING: Email failed to {owner_email}")
+                    print(f"❌ WARNING: Email failed to send to {owner_email}")
             except Exception as email_error:
-                print(f"ERROR: Email sending failed - {str(email_error)}")
+                print(f"❌ ERROR: Email sending failed - {str(email_error)}")
+                # Don't fail registration if email fails
                 email_sent = False
             
             notification_status = []
@@ -1145,7 +1152,7 @@ async def register_cattle(
             if email_sent:
                 notification_status.append("Email sent")
             
-            notifications = ", ".join(notification_status) if notification_status else "Notifications disabled"
+            notifications = ", ".join(notification_status) if notification_status else "Email notifications may be disabled - check SMTP configuration"
             
         except Exception as notification_error:
             print(f"WARNING: Notification error - {str(notification_error)}")
