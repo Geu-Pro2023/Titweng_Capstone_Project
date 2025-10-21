@@ -957,9 +957,9 @@ async def register_cattle(
                         for stored_embedding in cattle.embeddings[:2]:
                             if stored_embedding.embedding:
                                 stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
-                                if stored_vector.size == 256:
+                                if stored_vector.size == 256 and np.linalg.norm(stored_vector) > 0:
                                     stored_normalized = stored_vector / np.linalg.norm(stored_vector)
-                                    similarity = np.dot(first_normalized, stored_normalized)
+                                    similarity = float(np.dot(first_normalized, stored_normalized))
                                     
                                     if similarity >= 0.85:  # High similarity indicates duplicate
                                         return {
@@ -1281,8 +1281,8 @@ async def verify_cattle(
         if not cattle_similarity_scores:
             return {
                 "registered": False,
-                "status": "ERROR",
-                "message": "❌ Unable to process verification"
+                "status": "NOT_REGISTERED",
+                "message": "❌ COW NOT REGISTERED - No valid comparisons could be made"
             }
         
         # Find best match
