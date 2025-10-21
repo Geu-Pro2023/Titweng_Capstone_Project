@@ -337,11 +337,11 @@ def extract_nose_print_embedding(image_tensor: torch.Tensor) -> np.ndarray:
             # Quick validation
             embedding_magnitude = np.linalg.norm(embedding_vector)
             
-            if embedding_magnitude < 0.3 or embedding_magnitude > 1.8:
+            if embedding_magnitude < 0.1 or embedding_magnitude > 2.5:
                 raise ValueError(f"Invalid embedding magnitude: {embedding_magnitude:.3f}")
             
             embedding_std = np.std(embedding_vector)
-            if embedding_std < 0.1 or embedding_std > 0.8:
+            if embedding_std < 0.05 or embedding_std > 1.2:
                 raise ValueError(f"Invalid embedding distribution: {embedding_std:.3f}")
             
             return embedding_vector
@@ -399,16 +399,16 @@ def validate_nose_print_image(image_array: np.ndarray) -> Optional[np.ndarray]:
         return np.var(lbp_response)
     
     lbp_variance = calculate_lbp_variance(gray_image)
-    if lbp_variance < 100:  # Nose prints should have rich texture
+    if lbp_variance < 50:  # Relaxed for cropped/stretched images
         raise ValueError("Insufficient texture patterns - image does not appear to be a cattle nose print")
     
     # 4. EDGE DENSITY CHECK - Nose prints have characteristic edge patterns
     edges = cv2.Canny(gray_image, 50, 150)
     edge_density = np.sum(edges > 0) / edges.size
     
-    if edge_density < 0.05:  # Too few edges (like solid objects)
+    if edge_density < 0.02:  # Very relaxed for cropped images
         raise ValueError("Insufficient edge patterns - image appears to be a solid object, not a nose print")
-    elif edge_density > 0.4:  # Too many edges (like text, buildings)
+    elif edge_density > 0.6:  # More tolerant of edges
         raise ValueError("Too many sharp edges - image appears to be artificial object or text, not a nose print")
     
     # 5. COLOR ANALYSIS - Reject obviously non-biological colors
