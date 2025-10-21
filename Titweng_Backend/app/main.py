@@ -489,12 +489,20 @@ Titweng Cattle Recognition System
         )
         email_message.attach(pdf_attachment)
         
-        # Send email via SMTP
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()  # Enable encryption
-            server.login(smtp_username, smtp_password)
-            email_text = email_message.as_string()
-            server.sendmail(smtp_username, owner_email, email_text)
+        # Send email via SMTP with timeout and retry
+        try:
+            with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
+                server.starttls()  # Enable encryption
+                server.login(smtp_username, smtp_password)
+                email_text = email_message.as_string()
+                server.sendmail(smtp_username, owner_email, email_text)
+        except Exception as smtp_error:
+            print(f"SMTP Error: {str(smtp_error)}")
+            # Try alternative SMTP settings
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as server:
+                server.login(smtp_username, smtp_password)
+                email_text = email_message.as_string()
+                server.sendmail(smtp_username, owner_email, email_text)
         
         print(f"SUCCESS: Email sent to {owner_email}")
         return True
