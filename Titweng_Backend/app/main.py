@@ -1175,11 +1175,11 @@ async def verify_cattle(
             db.add(verification_log)
             db.commit()
             
-            # Send verification SMS
+            # Send verification SMS with security alert
             if owner and owner.phone:
                 send_sms_notification(
                     owner.phone,
-                    f"Your cattle {best_match_cattle.cow_tag} was successfully verified!"
+                    f"Hello, your cow with tag {best_match_cattle.cow_tag} is being verified now. Confirm if this is you or else contact the Titweng authorities now."
                 )
             
             return {
@@ -1351,13 +1351,12 @@ async def mobile_cattle_verification(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ):
-    """Mobile app cattle verification endpoint with lower threshold."""
+    """Mobile app cattle verification endpoint with security SMS notification."""
     try:
         print(f"INFO: Mobile verification started with {len(files)} files")
         
-        # Use the same verification logic but with lower threshold for mobile
-        # (Implementation similar to verify_cattle but with VERIFICATION_THRESHOLD = 0.75)
-        
+        # Use the same verification logic as main verify endpoint
+        # This will automatically send the security SMS when cattle is verified
         return await verify_cattle(files, db)
         
     except Exception as mobile_verification_error:
