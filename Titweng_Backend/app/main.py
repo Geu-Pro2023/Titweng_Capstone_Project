@@ -337,11 +337,13 @@ def extract_nose_print_embedding(image_tensor: torch.Tensor) -> np.ndarray:
             # Quick validation
             embedding_magnitude = np.linalg.norm(embedding_vector)
             
-            if embedding_magnitude < 0.1 or embedding_magnitude > 2.5:
+            # Minimal embedding validation
+            if embedding_magnitude < 0.01 or embedding_magnitude > 10.0:
                 raise ValueError(f"Invalid embedding magnitude: {embedding_magnitude:.3f}")
             
+            # Very relaxed std check
             embedding_std = np.std(embedding_vector)
-            if embedding_std < 0.05 or embedding_std > 1.2:
+            if embedding_std < 0.001 or embedding_std > 5.0:
                 raise ValueError(f"Invalid embedding distribution: {embedding_std:.3f}")
             
             return embedding_vector
@@ -352,108 +354,17 @@ def extract_nose_print_embedding(image_tensor: torch.Tensor) -> np.ndarray:
 
 def validate_nose_print_image(image_array: np.ndarray) -> Optional[np.ndarray]:
     """
-    Comprehensive nose print validation to ensure only cattle nose prints are accepted.
-    
-    This function performs multiple validation checks to detect and reject:
-    - Human faces/body parts
-    - Non-biological objects (stones, buildings, etc.)
-    - Other animals
-    - Low quality or corrupted images
-    
-    Args:
-        image_array (np.ndarray): Input image as numpy array
-        
-    Returns:
-        np.ndarray or None: Validated image array or None if not a valid nose print
-        
-    Raises:
-        ValueError: If image is detected as non-cattle content
+    Minimal validation for cropped/stretched nose print images.
     """
-    # Check if image is empty or corrupted
+    # Only check if image is empty
     if image_array.size == 0:
-        raise ValueError("Empty or corrupted image - please upload a valid cattle nose print image")
+        raise ValueError("Empty image")
     
-    # Convert to grayscale for analysis
-    if len(image_array.shape) == 3:
-        gray_image = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
-    else:
-        gray_image = image_array
+    # Basic size check
+    if len(image_array.shape) < 2:
+        raise ValueError("Invalid image format")
     
-    # 1. BASIC QUALITY CHECKS
-    image_variance = np.var(gray_image)
-    if image_variance < 50:
-        raise ValueError("Image too uniform or blank - cattle nose prints should have clear texture patterns")
-    
-    # 2. DETECT HUMAN FACES (reject human images)
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    faces = face_cascade.detectMultiScale(gray_image, 1.1, 4)
-    if len(faces) > 0:
-        raise ValueError("Human face detected - only cattle nose prints are allowed for registration")
-    
-    # 3. TEXTURE ANALYSIS - Nose prints have specific texture characteristics
-    # Calculate Local Binary Pattern variance (nose prints have rich texture)
-    def calculate_lbp_variance(image):
-        # Simple LBP-like calculation
-        kernel = np.array([[-1,-1,-1],[-1,8,-1],[-1,-1,-1]])
-        lbp_response = cv2.filter2D(image.astype(np.float32), -1, kernel)
-        return np.var(lbp_response)
-    
-    lbp_variance = calculate_lbp_variance(gray_image)
-    if lbp_variance < 50:  # Relaxed for cropped/stretched images
-        raise ValueError("Insufficient texture patterns - image does not appear to be a cattle nose print")
-    
-    # 4. EDGE DENSITY CHECK - Nose prints have characteristic edge patterns
-    edges = cv2.Canny(gray_image, 50, 150)
-    edge_density = np.sum(edges > 0) / edges.size
-    
-    if edge_density < 0.02:  # Very relaxed for cropped images
-        raise ValueError("Insufficient edge patterns - image appears to be a solid object, not a nose print")
-    elif edge_density > 0.6:  # More tolerant of edges
-        raise ValueError("Too many sharp edges - image appears to be artificial object or text, not a nose print")
-    
-    # 5. COLOR ANALYSIS - Reject obviously non-biological colors
-    if len(image_array.shape) == 3:
-        # Calculate dominant colors
-        mean_color = np.mean(image_array, axis=(0,1))
-        
-        # Check for unnatural colors (too blue, too green, etc.)
-        r, g, b = mean_color
-        
-        # Nose prints should be in natural color ranges (browns, pinks, blacks)
-        if b > r + 50 or g > r + 50:  # Too blue or too green
-            raise ValueError("Unnatural colors detected - image does not appear to be biological tissue")
-        
-        # Check for overly saturated colors (artificial objects)
-        saturation = np.max(mean_color) - np.min(mean_color)
-        if saturation > 100:
-            raise ValueError("Overly saturated colors - image appears to be artificial, not a nose print")
-    
-    # 6. SIZE AND ASPECT RATIO CHECK
-    height, width = gray_image.shape
-    aspect_ratio = width / height
-    
-    # Nose prints should have reasonable aspect ratios
-    if aspect_ratio < 0.3 or aspect_ratio > 3.0:
-        raise ValueError("Unusual image proportions - please crop image to focus on the nose print area")
-    
-    # 7. BRIGHTNESS ANALYSIS - Reject overly dark or bright images
-    mean_brightness = np.mean(gray_image)
-    if mean_brightness < 30:
-        raise ValueError("Image too dark - please ensure good lighting when capturing nose print")
-    elif mean_brightness > 220:
-        raise ValueError("Image overexposed - please adjust lighting when capturing nose print")
-    
-    # 8. NOISE ANALYSIS - Detect heavily processed or artificial images
-    # Calculate image gradient magnitude
-    grad_x = cv2.Sobel(gray_image, cv2.CV_64F, 1, 0, ksize=3)
-    grad_y = cv2.Sobel(gray_image, cv2.CV_64F, 0, 1, ksize=3)
-    gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
-    gradient_std = np.std(gradient_magnitude)
-    
-    if gradient_std < 5:  # Too smooth (artificial/processed)
-        raise ValueError("Image appears artificially smooth - please use original, unprocessed nose print photos")
-    
-    print(f"SUCCESS: Image validation passed - texture variance: {lbp_variance:.1f}, edge density: {edge_density:.3f}")
+    print("SUCCESS: Minimal validation passed")
     return image_array
 
 # ============================================================================
@@ -1111,10 +1022,10 @@ async def register_cattle(
                 continue
         
         # Ensure minimum number of embeddings
-        if len(processed_embeddings) < 3:
+        if len(processed_embeddings) < 1:
             raise HTTPException(
                 status_code=400,
-                detail="Need at least 3 high-quality nose print images for registration. Please ensure images are clear and well-lit."
+                detail="Need at least 1 nose print image for registration."
             )
         
         print(f"SUCCESS: Generated {len(processed_embeddings)} embeddings for cattle registration")
