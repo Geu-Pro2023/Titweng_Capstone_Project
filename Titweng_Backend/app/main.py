@@ -1341,7 +1341,7 @@ async def verify_cattle(
         
         # ULTRA-ROBUST verification - prevent any cow mixing
         ULTRA_HIGH_THRESHOLD = 0.90  # Very high threshold for 100% confidence
-        MIN_SCORE_DIFFERENCE = 0.25   # Huge gap required between 1st and 2nd match
+        MIN_SCORE_DIFFERENCE = 0.20   # Gap required between 1st and 2nd match (reduced from 0.25)
         
         # Multi-layer verification for 100% robustness
         is_verified = False
@@ -1383,7 +1383,7 @@ async def verify_cattle(
                     else:
                         verification_details.append(f"❌ Inconsistent: only {high_similarity_count} embeddings >= 0.88")
                 else:
-                    verification_details.append(f"❌ Too close to 2nd place: {score_difference:.4f} < {MIN_SCORE_DIFFERENCE}")
+                    verification_details.append(f"❌ Too close to 2nd place: {score_difference:.4f} < {MIN_SCORE_DIFFERENCE} (need 20% gap)")
             else:
                 # Only one cattle in database - still require ultra-high threshold
                 verification_details.append("✅ Only one cattle in database")
@@ -1790,7 +1790,7 @@ def get_validation_info():
         },
         "thresholds": {
             "primary_threshold": 0.90,
-            "score_gap_required": 0.25,
+            "score_gap_required": 0.20,
             "individual_embedding_threshold": 0.88,
             "cross_verification_threshold": 0.87
         },
