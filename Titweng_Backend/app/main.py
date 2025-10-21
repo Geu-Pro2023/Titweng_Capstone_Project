@@ -957,10 +957,9 @@ async def register_cattle(
             db.commit()
             db.refresh(owner)
         
-        # Check if cow is already registered by comparing embeddings
+        # STRONG duplicate detection to prevent same cow registration
         print("INFO: Checking for duplicate registration...")
         
-        # Quick duplicate check with first image
         if files:
             try:
                 first_image_content = await files[0].read()
@@ -974,25 +973,32 @@ async def register_cattle(
                     first_embedding = extract_nose_print_embedding(first_processed_tensor)
                     first_normalized = first_embedding / np.linalg.norm(first_embedding)
                     
-                    # Check against existing cattle
-                    existing_cattle = db.query(Cow).filter(Cow.embeddings.any()).limit(50).all()
+                    # Check against ALL existing cattle
+                    existing_cattle = db.query(Cow).all()
                     for cattle in existing_cattle:
-                        for stored_embedding in cattle.embeddings[:2]:
-                            if stored_embedding.embedding:
-                                stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
-                                if stored_vector.size == 256 and np.linalg.norm(stored_vector) > 0:
-                                    stored_normalized = stored_vector / np.linalg.norm(stored_vector)
-                                    similarity = float(np.dot(first_normalized, stored_normalized))
-                                    
-                                    if similarity >= 0.88:  # High similarity indicates duplicate
-                                        raise HTTPException(
-                                            status_code=400,
-                                            detail=f"COW ALREADY REGISTERED - This cow is already in the system as {cattle.cow_tag}. Similarity: {similarity:.4f}"
-                                        )
+                        if not cattle.embeddings:
+                            continue
+                            
+                        for stored_embedding in cattle.embeddings:
+                            if stored_embedding.embedding is None:
+                                continue
+                                
+                            stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
+                            if stored_vector.size == 256 and np.linalg.norm(stored_vector) > 0:
+                                stored_normalized = stored_vector / np.linalg.norm(stored_vector)
+                                similarity = float(np.dot(first_normalized, stored_normalized))
+                                
+                                if similarity >= 0.85:  # Strong duplicate detection
+                                    raise HTTPException(
+                                        status_code=400,
+                                        detail=f"DUPLICATE REGISTRATION BLOCKED - This cow is already registered as {cattle.cow_tag} (Similarity: {similarity:.4f}). Cannot register the same cow twice."
+                                    )
                     
                     # Reset file pointer for main processing
                     files[0].file.seek(0)
                     
+            except HTTPException:
+                raise  # Re-raise duplicate detection errors
             except Exception as duplicate_check_error:
                 print(f"WARNING: Duplicate check failed - {str(duplicate_check_error)}")
                 # Continue with registration if duplicate check fails
@@ -1152,12 +1158,8 @@ async def register_cattle(
             "receipt_path": receipt_path,
             "embeddings_count": len(processed_embeddings),
             "embeddings_saved_to_db": saved_embeddings_count,
-            "message": f"Cattle registered successfully with tag {cattle_tag}",
-            "notifications": notifications,
-            "debug_endpoints": {
-                "check_database": "/debug/database-contents",
-                "test_this_cow": f"/debug/test-specific-cow/{cattle_tag}"
-            }
+            "message": f"✅ NEW CATTLE REGISTERED - Tag: {cattle_tag} (Duplicate detection passed)",
+            "notifications": notifications
         }
         
     except HTTPException:
