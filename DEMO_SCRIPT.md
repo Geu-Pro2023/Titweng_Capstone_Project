@@ -30,7 +30,7 @@
 
 ### 4. **Show Admin Dashboard** (3 minutes)
 - Login: https://titweng-admin.netlify.app
-- **Credentials:** titweng/titweng
+- **Credentials:** titweng/titweng@2025
 - **Navigate through:**
   - Dashboard (statistics)
   - Cow Management (table view)

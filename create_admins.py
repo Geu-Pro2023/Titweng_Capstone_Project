@@ -24,7 +24,7 @@ if __name__ == "__main__":
     print()
     print("📋 Login Credentials:")
     print("Username: titweng")
-    print("Password: titweng")
+    print("Password: titweng@2025")
     print()
     print("ℹ️  This capstone project uses a single admin account for demonstration.")
     print("ℹ️  In production, additional admins would be created based on organizational needs.")

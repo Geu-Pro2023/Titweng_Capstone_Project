@@ -107,13 +107,13 @@ def create_default_admin(db: Session):
             default_admin = Admin(
                 username="titweng",
                 email="admin@titweng.com",
-                password_hash=hash_password("titweng"),
+                password_hash=hash_password("titweng@2025"),
                 full_name="Titweng Administrator",
                 role="super_admin"
             )
             db.add(default_admin)
             db.commit()
-            print("Default admin created: username=titweng, password=titweng")
+            print("Default admin created: username=titweng, password=titweng@2025")
     except Exception as e:
         print(f"Error creating default admin: {e}")
         db.rollback()
