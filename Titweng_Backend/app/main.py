@@ -1539,6 +1539,113 @@ def get_validation_info():
         "security_note": "System prevents fraudulent registrations with non-cattle images"
     }
 
+@app.get("/view-cow-image/{cow_tag}/{image_number}", tags=["Database Images"])
+def view_cow_image_from_database(cow_tag: str, image_number: int, db: Session = Depends(get_db)):
+    """View nose print images stored in database during registration."""
+    try:
+        # Find the cattle by tag
+        cattle = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
+        if not cattle:
+            raise HTTPException(status_code=404, detail=f"Cattle with tag {cow_tag} not found")
+        
+        # Find the specific image by number (1-based indexing)
+        if image_number < 1 or image_number > len(cattle.embeddings):
+            raise HTTPException(status_code=404, detail=f"Image {image_number} not found for cattle {cow_tag}")
+        
+        # Get the embedding record (0-based indexing)
+        embedding_record = cattle.embeddings[image_number - 1]
+        
+        if not embedding_record.image_data:
+            raise HTTPException(status_code=404, detail=f"Image data not found for {cow_tag} image {image_number}")
+        
+        # Return the image as response
+        return Response(
+            content=embedding_record.image_data,
+            media_type="image/jpeg",
+            headers={"Content-Disposition": f"inline; filename={cow_tag}_image_{image_number}.jpg"}
+        )
+        
+    except Exception as error:
+        print(f"ERROR: Failed to retrieve image - {str(error)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve image: {str(error)}")
+
+@app.get("/list-database-images", tags=["Database Images"])
+def list_all_database_images(db: Session = Depends(get_db)):
+    """List all nose print images stored in database."""
+    try:
+        # Get all cattle with their embeddings
+        all_cattle = db.query(Cow).all()
+        
+        image_list = []
+        total_images = 0
+        
+        for cattle in all_cattle:
+            owner_name = cattle.owner.full_name if cattle.owner else "Unknown"
+            
+            for idx, embedding in enumerate(cattle.embeddings):
+                if embedding.image_data:  # Only count images that have data
+                    image_list.append({
+                        "cow_tag": cattle.cow_tag,
+                        "image_number": idx + 1,
+                        "image_filename": embedding.image_path,
+                        "owner_name": owner_name,
+                        "registration_date": cattle.registration_date.strftime('%d/%m/%Y %H:%M') if cattle.registration_date else "Unknown",
+                        "view_url": f"/view-cow-image/{cattle.cow_tag}/{idx + 1}",
+                        "image_size_bytes": len(embedding.image_data)
+                    })
+                    total_images += 1
+        
+        return {
+            "total_cattle": len(all_cattle),
+            "total_images_in_database": total_images,
+            "images": image_list,
+            "note": "These images are stored as binary data in PostgreSQL database",
+            "usage": "Visit /view-cow-image/{cow_tag}/{image_number} to see individual images"
+        }
+        
+    except Exception as error:
+        print(f"ERROR: Failed to list images - {str(error)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list images: {str(error)}")
+
+@app.get("/database-stats", tags=["Database Images"])
+def get_database_statistics(db: Session = Depends(get_db)):
+    """Get statistics about images and data stored in database."""
+    try:
+        # Count cattle and images
+        total_cattle = db.query(Cow).count()
+        total_embeddings = db.query(Embedding).count()
+        
+        # Calculate total image data size
+        embeddings_with_images = db.query(Embedding).filter(Embedding.image_data.isnot(None)).all()
+        total_image_size = sum(len(emb.image_data) for emb in embeddings_with_images if emb.image_data)
+        
+        # Convert bytes to MB
+        total_size_mb = total_image_size / (1024 * 1024)
+        
+        return {
+            "database_storage": {
+                "total_registered_cattle": total_cattle,
+                "total_nose_print_images": len(embeddings_with_images),
+                "total_embeddings_vectors": total_embeddings,
+                "total_image_data_size_mb": round(total_size_mb, 2),
+                "average_images_per_cattle": round(len(embeddings_with_images) / total_cattle, 1) if total_cattle > 0 else 0
+            },
+            "storage_details": {
+                "image_storage": "PostgreSQL LargeBinary column",
+                "embedding_storage": "PostgreSQL Vector(256) column with pgvector extension",
+                "database_location": "Render PostgreSQL Cloud Database"
+            },
+            "endpoints": {
+                "list_all_images": "/list-database-images",
+                "view_specific_image": "/view-cow-image/{cow_tag}/{image_number}",
+                "example_usage": "/view-cow-image/TWDX0004/1"
+            }
+        }
+        
+    except Exception as error:
+        print(f"ERROR: Failed to get database stats - {str(error)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get database stats: {str(error)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
