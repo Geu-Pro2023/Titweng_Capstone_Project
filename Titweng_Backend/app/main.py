@@ -816,16 +816,31 @@ def system_root():
 
 @app.get("/health", tags=["System Status"])
 def health_check():
-    """System health check endpoint with memory monitoring."""
+    """System health check endpoint with database monitoring."""
     try:
-        # Test database connection
+        # Test database connection and get stats
         database_session = SessionLocal()
         database_session.execute(text("SELECT 1"))
+        
+        # Get database statistics
+        total_cows = database_session.query(Cow).count()
+        total_owners = database_session.query(Owner).count()
+        total_embeddings = database_session.query(Embedding).count()
+        
         database_session.close()
         database_connected = True
+        
+        db_stats = {
+            "total_registered_cows": total_cows,
+            "total_owners": total_owners,
+            "total_embeddings": total_embeddings,
+            "avg_embeddings_per_cow": round(total_embeddings / total_cows, 1) if total_cows > 0 else 0
+        }
+        
     except Exception as db_error:
         print(f"Database connection error: {db_error}")
         database_connected = False
+        db_stats = {"error": str(db_error)}
     
     current_memory = get_memory_usage()
     
@@ -834,6 +849,7 @@ def health_check():
         "model_loaded": siamese_model is not None,
         "model_status": "loaded" if siamese_model is not None else "CRITICAL_ERROR",
         "database_connected": database_connected,
+        "database_stats": db_stats,
         "memory_usage_mb": current_memory,
         "memory_optimized": True,
         "timestamp": datetime.now().isoformat()
@@ -971,8 +987,9 @@ async def register_cattle(
                                         return {
                                             "success": False,
                                             "error": "DUPLICATE_REGISTRATION",
-                                            "message": f"❌ COW ALREADY REGISTERED - This cow is already in the system with tag: {cattle.cow_tag}",
+                                            "message": f"❌ COW ALREADY REGISTERED - This cow is already in the system",
                                             "existing_cattle": {
+                                                "cow_id": cattle.cow_id,
                                                 "cattle_tag": cattle.cow_tag,
                                                 "owner_name": cattle.owner.full_name if cattle.owner else "Unknown",
                                                 "registration_date": cattle.registration_date.strftime('%d/%m/%Y') if cattle.registration_date else "Unknown"
