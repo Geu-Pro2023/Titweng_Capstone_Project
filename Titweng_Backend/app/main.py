@@ -984,19 +984,11 @@ async def register_cattle(
                                     stored_normalized = stored_vector / np.linalg.norm(stored_vector)
                                     similarity = float(np.dot(first_normalized, stored_normalized))
                                     
-                                    if similarity >= 0.85:  # High similarity indicates duplicate
-                                        return {
-                                            "success": False,
-                                            "error": "DUPLICATE_REGISTRATION",
-                                            "message": f"❌ COW ALREADY REGISTERED - This cow is already in the system",
-                                            "existing_cattle": {
-                                                "cow_id": cattle.cow_id,
-                                                "cattle_tag": cattle.cow_tag,
-                                                "owner_name": cattle.owner.full_name if cattle.owner else "Unknown",
-                                                "registration_date": cattle.registration_date.strftime('%d/%m/%Y') if cattle.registration_date else "Unknown"
-                                            },
-                                            "similarity_score": round(float(similarity), 4)
-                                        }
+                                    if similarity >= 0.88:  # High similarity indicates duplicate
+                                        raise HTTPException(
+                                            status_code=400,
+                                            detail=f"COW ALREADY REGISTERED - This cow is already in the system as {cattle.cow_tag}. Similarity: {similarity:.4f}"
+                                        )
                     
                     # Reset file pointer for main processing
                     files[0].file.seek(0)
@@ -1293,14 +1285,12 @@ async def verify_cattle(
             # Process up to 5 embeddings per cattle
             for stored_embedding in cattle.embeddings[:5]:
                 try:
-                    if not stored_embedding.embedding:
+                    # Fix: Check if embedding exists properly
+                    if stored_embedding.embedding is None:
                         continue
                     
                     # Convert embedding to numpy array
-                    if isinstance(stored_embedding.embedding, list):
-                        stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
-                    else:
-                        stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
+                    stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
                     
                     if stored_vector.size != 256:
                         continue
