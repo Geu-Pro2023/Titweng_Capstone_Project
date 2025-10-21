@@ -1021,11 +1021,11 @@ async def register_cattle(
                 print(f"ERROR: Failed to process image {file_index + 1} - {str(processing_error)}")
                 continue
         
-        # Ensure minimum number of embeddings
-        if len(processed_embeddings) < 1:
+        # Ensure minimum number of embeddings for robustness
+        if len(processed_embeddings) < 2:
             raise HTTPException(
                 status_code=400,
-                detail="Need at least 1 nose print image for registration."
+                detail="Need at least 2 nose print images for robust registration."
             )
         
         print(f"SUCCESS: Generated {len(processed_embeddings)} embeddings for cattle registration")
