@@ -66,9 +66,9 @@ async function handleLogin(e) {
         
         const data = await response.json();
         
-        if (response.ok && data.token) {
+        if (response.ok && data.access_token) {
             // Store token securely
-            localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, data.token);
+            localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, data.access_token);
             localStorage.setItem('admin_user', JSON.stringify(data.user));
             
             showLoginMessage('Login successful! Redirecting...', 'success');

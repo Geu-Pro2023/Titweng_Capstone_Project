@@ -2,6 +2,10 @@
 const API_CONFIG = {
     BASE_URL: 'https://titweng-capstone-project.onrender.com',
     ENDPOINTS: {
+        // Authentication
+        LOGIN: '/auth/login',
+        VERIFY_TOKEN: '/auth/verify',
+        
         // Admin Dashboard
         DASHBOARD: '/admin/dashboard',
         REPORTS: '/admin/reports', 
