@@ -1091,11 +1091,9 @@ async def register_cattle(
         try:
             print("INFO: Sending notifications...")
             
-            # Send SMS first
-            sms_sent = send_sms_notification(
-                owner_phone,
-                f"Your cattle has been registered successfully! Tag: {cattle_tag}. Keep your receipt safe."
-            )
+            # No SMS during registration - only send email
+            sms_sent = False
+            print("INFO: SMS disabled for registration - only sent during verification")
             
             # Send email with better error handling
             email_sent = False
@@ -1407,7 +1405,7 @@ async def verify_cattle(
             if owner and owner.phone:
                 send_sms_notification(
                     owner.phone,
-                    f"SECURITY ALERT: Your cow {best_match_cattle.cow_tag} is being verified RIGHT NOW. If this is NOT you, contact Titweng authorities IMMEDIATELY."
+                    f"TITWENG ALERT: Your cow with tag {best_match_cattle.cow_tag} is being verified right now. If this is you, please confirm. If NOT you, call Titweng immediately for security assistance. Stay vigilant!"
                 )
             
             return {
