@@ -938,7 +938,7 @@ async def register_cattle(
 ):
     """Register new cattle with nose print images."""
     try:
-        print(f"INFO: Starting cattle registration for owner: {owner_name}")
+        print(f"INFO: Starting cattle registration for owner: {owner_name} ({owner_email})")
         
         # Generate unique cattle tag
         cattle_tag = generate_unique_cow_tag(db)
@@ -948,9 +948,18 @@ async def register_cattle(
         if age and age.isdigit():
             cattle_age = int(age)
         
-        # Create or get owner record
-        owner = db.query(Owner).filter(Owner.email == owner_email).first()
-        if not owner:
+        # Create new owner record for each registration
+        # Check if owner with same name AND email exists
+        existing_owner = db.query(Owner).filter(
+            Owner.full_name == owner_name,
+            Owner.email == owner_email
+        ).first()
+        
+        if existing_owner:
+            print(f"INFO: Using existing owner: {existing_owner.full_name} ({existing_owner.email})")
+            owner = existing_owner
+        else:
+            print(f"INFO: Creating new owner: {owner_name} ({owner_email})")
             owner = Owner(
                 full_name=owner_name,
                 email=owner_email,
@@ -1120,7 +1129,7 @@ async def register_cattle(
         # Final verification that cattle is properly saved with embeddings
         final_cattle_check = db.query(Cow).filter(Cow.cow_tag == cattle_tag).first()
         if final_cattle_check and final_cattle_check.embeddings:
-            print(f"SUCCESS: Cattle {cattle_tag} registered with {len(final_cattle_check.embeddings)} embeddings")
+            print(f"SUCCESS: Cattle {cattle_tag} registered to {owner_name} with {len(final_cattle_check.embeddings)} embeddings")
         else:
             print(f"ERROR: Cattle {cattle_tag} registration verification failed - no embeddings found")
         
@@ -1165,7 +1174,7 @@ async def register_cattle(
             "receipt_path": receipt_path,
             "embeddings_count": len(processed_embeddings),
             "embeddings_saved_to_db": saved_embeddings_count,
-            "message": f"✅ NEW CATTLE REGISTERED - Tag: {cattle_tag} (Duplicate detection passed)",
+            "message": f"✅ NEW CATTLE REGISTERED - Tag: {cattle_tag} for {owner_name}",
             "notifications": notifications
         }
         
