@@ -267,17 +267,6 @@ def extract_nose_print_embedding(image_tensor: torch.Tensor) -> np.ndarray:
             raise ValueError("INVALID: Embedding contains outliers - image may not be a proper nose print")
         
         print(f"SUCCESS: Valid nose print embedding - magnitude: {embedding_magnitude:.3f}, std: {embedding_std:.3f}")
-        return embedding_vectorg_vector = embedding_tensor.cpu().numpy().flatten()
-        
-        # Quality validation - check embedding magnitude
-        embedding_magnitude = np.linalg.norm(embedding_vector)
-        
-        # Validate embedding quality based on magnitude
-        if embedding_magnitude < 0.5:
-            raise ValueError("Low quality embedding detected - image may be too dark or blurry")
-        elif embedding_magnitude > 2.0:
-            raise ValueError("Unusual embedding detected - image may be corrupted or invalid")
-        
         return embedding_vector
 
 def validate_nose_print_image(image_array: np.ndarray) -> Optional[np.ndarray]:
