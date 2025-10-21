@@ -505,40 +505,38 @@ Titweng Cattle Recognition System
 
 def generate_unique_cow_tag(database_session: Session) -> str:
     """
-    Generate a unique, secure cattle identification tag.
+    Generate a completely random, secure cattle identification tag.
     
-    The tag format is: TW + 2 random letters + 4 sequential digits
-    Example: TWAB0001, TWXY0002, etc.
+    The tag format is: TW + 2 random letters + 4 random digits
+    Example: TWAB7392, TWXY1847, etc.
     
     Args:
         database_session (Session): Database session for checking uniqueness
         
     Returns:
-        str: Unique cattle tag identifier
+        str: Unique random cattle tag identifier
     """
     import random
     import string
     
-    # Get current count of registered cattle
-    cow_count_query = database_session.execute(text("SELECT COUNT(*) FROM cows"))
-    total_registered_cows = cow_count_query.fetchone()[0]
+    max_attempts = 100  # Prevent infinite loop
     
-    # Generate tag components
-    prefix = "TW"  # Titweng prefix
-    random_letters = ''.join(random.choices(string.ascii_uppercase, k=2))
-    sequential_number = f"{total_registered_cows + 1:04d}"  # 4-digit number with leading zeros
-    
-    # Combine components to create tag
-    proposed_tag = f"{prefix}{random_letters}{sequential_number}"
-    
-    # Ensure tag is unique in database (handle rare collision case)
-    while database_session.query(Cow).filter(Cow.cow_tag == proposed_tag).first():
-        # Generate new random letters if collision occurs
+    for attempt in range(max_attempts):
+        # Generate completely random tag components
+        prefix = "TW"  # Titweng prefix
         random_letters = ''.join(random.choices(string.ascii_uppercase, k=2))
-        proposed_tag = f"{prefix}{random_letters}{sequential_number}"
+        random_digits = ''.join(random.choices(string.digits, k=4))
+        
+        # Combine components to create random tag
+        proposed_tag = f"{prefix}{random_letters}{random_digits}"
+        
+        # Check if tag is unique in database
+        if not database_session.query(Cow).filter(Cow.cow_tag == proposed_tag).first():
+            print(f"INFO: Generated random secure cattle tag: {proposed_tag}")
+            return proposed_tag
     
-    print(f"INFO: Generated unique cattle tag: {proposed_tag}")
-    return proposed_tag
+    # Fallback if somehow all attempts fail
+    raise Exception("Failed to generate unique cattle tag after 100 attempts")
 
 def generate_pdf_receipt(cow_tag: str, owner_name: str, cow_data: dict = None) -> bytes:
     """
@@ -1084,11 +1082,24 @@ async def register_cattle(
         # Send notifications
         try:
             print("INFO: Sending notifications...")
+            
+            # Send SMS first
             sms_sent = send_sms_notification(
                 owner_phone,
                 f"Your cattle has been registered successfully! Tag: {cattle_tag}. Keep your receipt safe."
             )
-            email_sent = send_email_with_receipt(owner_email, owner_name, cattle_tag, pdf_receipt)
+            
+            # Send email with better error handling
+            email_sent = False
+            try:
+                email_sent = send_email_with_receipt(owner_email, owner_name, cattle_tag, pdf_receipt)
+                if email_sent:
+                    print(f"SUCCESS: Email sent to {owner_email}")
+                else:
+                    print(f"WARNING: Email failed to {owner_email}")
+            except Exception as email_error:
+                print(f"ERROR: Email sending failed - {str(email_error)}")
+                email_sent = False
             
             notification_status = []
             if sms_sent:
