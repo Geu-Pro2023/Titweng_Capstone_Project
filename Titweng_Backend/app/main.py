@@ -173,17 +173,22 @@ def load_siamese_model():
         else:
             state_dict = model_checkpoint
         
-        # Fix architecture mismatch - map old names to new names
+        # Fix architecture mismatch - map trained model to current architecture
         new_state_dict = {}
         for key, value in state_dict.items():
             # Map backbone.* to feature_extractor.*
             if key.startswith('backbone.'):
                 new_key = key.replace('backbone.', 'feature_extractor.')
                 new_state_dict[new_key] = value
-            # Map fc.* to embedding_network.*
-            elif key.startswith('fc.'):
-                new_key = key.replace('fc.', 'embedding_network.')
-                new_state_dict[new_key] = value
+            # Map fc layers to embedding_network layers
+            elif key == 'fc.1.weight':
+                new_state_dict['embedding_network.1.weight'] = value
+            elif key == 'fc.1.bias':
+                new_state_dict['embedding_network.1.bias'] = value
+            elif key == 'fc.4.weight':
+                new_state_dict['embedding_network.4.weight'] = value
+            elif key == 'fc.4.bias':
+                new_state_dict['embedding_network.4.bias'] = value
             else:
                 new_state_dict[key] = value
         
