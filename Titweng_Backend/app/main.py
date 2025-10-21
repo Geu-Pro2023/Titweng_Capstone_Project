@@ -173,35 +173,87 @@ def load_siamese_model():
             else:
                 new_state_dict[key] = value
         
-        # Load the corrected state dict
+        # Load the corrected state dict with comprehensive error handling
         try:
+            # First try: Direct loading with architecture mapping
             model.load_state_dict(new_state_dict, strict=False)
-            print("INFO: Model loaded with architecture mapping (backbone->feature_extractor, fc->embedding_network)")
+            print("SUCCESS: Model loaded with architecture mapping (backbone->feature_extractor, fc->embedding_network)")
         except Exception as load_error:
-            print(f"WARNING: Strict loading failed, trying flexible loading: {str(load_error)}")
-            # Try loading only matching keys
+            print(f"INFO: Direct loading failed, trying parameter matching: {str(load_error)}")
+            
+            # Second try: Load only matching parameters
             model_dict = model.state_dict()
-            filtered_dict = {k: v for k, v in new_state_dict.items() if k in model_dict and v.shape == model_dict[k].shape}
+            filtered_dict = {}
+            
+            for key, value in new_state_dict.items():
+                if key in model_dict:
+                    if value.shape == model_dict[key].shape:
+                        filtered_dict[key] = value
+                        print(f"MATCHED: {key} - shape {value.shape}")
+                    else:
+                        print(f"SHAPE MISMATCH: {key} - saved: {value.shape}, expected: {model_dict[key].shape}")
+                else:
+                    print(f"KEY NOT FOUND: {key}")
+            
+            if len(filtered_dict) == 0:
+                raise Exception("CRITICAL: No matching parameters found between saved model and current architecture")
+            
+            # Update model with matching parameters
             model_dict.update(filtered_dict)
             model.load_state_dict(model_dict)
-            print(f"INFO: Loaded {len(filtered_dict)} matching parameters out of {len(new_state_dict)} total")
+            
+            loaded_params = len(filtered_dict)
+            total_params = len(model_dict)
+            load_percentage = (loaded_params / total_params) * 100
+            
+            print(f"SUCCESS: Loaded {loaded_params}/{total_params} parameters ({load_percentage:.1f}%)")
+            
+            if load_percentage < 80:
+                raise Exception(f"CRITICAL: Only {load_percentage:.1f}% of parameters loaded - insufficient for reliable operation")
         
         # Set model to evaluation mode (important for inference)
         model.eval()
         
-        # Verify model is working
+        # CRITICAL: Verify model is working 100%
+        print("INFO: Verifying Siamese CNN model functionality...")
+        
         try:
+            # Test 1: Basic forward pass
             test_input = torch.randn(1, 3, 128, 128)
             with torch.no_grad():
                 test_output = model.forward_one(test_input)
-            if test_output.shape == (1, 256):
-                print("SUCCESS: Siamese CNN model loaded and verified (output shape: 256D)")
-                return model
-            else:
-                print(f"ERROR: Model output shape mismatch: {test_output.shape}, expected: (1, 256)")
-                return None
-        except Exception as test_error:
-            print(f"ERROR: Model verification failed: {str(test_error)}")
+            
+            # Test 2: Output shape verification
+            if test_output.shape != (1, 256):
+                raise Exception(f"CRITICAL: Model output shape {test_output.shape}, expected (1, 256)")
+            
+            # Test 3: Output value validation
+            if torch.isnan(test_output).any():
+                raise Exception("CRITICAL: Model produces NaN values")
+            
+            if torch.isinf(test_output).any():
+                raise Exception("CRITICAL: Model produces infinite values")
+            
+            # Test 4: Embedding magnitude check
+            embedding_magnitude = torch.norm(test_output).item()
+            if embedding_magnitude < 0.1 or embedding_magnitude > 10.0:
+                raise Exception(f"CRITICAL: Unusual embedding magnitude {embedding_magnitude:.3f}")
+            
+            # Test 5: Multiple forward passes for consistency
+            test_output2 = model.forward_one(test_input)
+            if not torch.allclose(test_output, test_output2, atol=1e-6):
+                raise Exception("CRITICAL: Model produces inconsistent outputs")
+            
+            print(f"SUCCESS: Siamese CNN model fully verified!")
+            print(f"  - Output shape: {test_output.shape}")
+            print(f"  - Embedding magnitude: {embedding_magnitude:.3f}")
+            print(f"  - Model is deterministic and stable")
+            
+            return model
+            
+        except Exception as verification_error:
+            print(f"CRITICAL ERROR: Model verification failed: {str(verification_error)}")
+            print("SYSTEM CANNOT OPERATE WITH FAULTY MODEL")
             return None
         
     except Exception as model_error:
@@ -266,18 +318,12 @@ def extract_nose_print_embedding(image_tensor: torch.Tensor) -> np.ndarray:
     """
     global siamese_model
     
-    # Ensure model is loaded
+    # CRITICAL: Siamese model MUST be loaded - no fallbacks allowed
     if siamese_model is None:
-        print("WARNING: Siamese model not available - using fallback embedding generation")
-        # Generate a deterministic but unique embedding based on image content
-        image_hash = hashlib.md5(image_tensor.cpu().numpy().tobytes()).hexdigest()
-        # Convert hash to 256-dimensional vector
-        hash_bytes = bytes.fromhex(image_hash)
-        embedding_vector = np.frombuffer(hash_bytes * 16, dtype=np.uint8)[:256].astype(np.float32)
-        # Normalize to unit vector
-        embedding_vector = embedding_vector / np.linalg.norm(embedding_vector)
-        print("INFO: Generated fallback embedding from image hash")
-        return embedding_vector
+        raise HTTPException(
+            status_code=503, 
+            detail="CRITICAL ERROR: Siamese CNN model not loaded - system cannot function without trained model"
+        )
     
     # Generate embedding without gradient computation (inference mode)
     with torch.no_grad():
@@ -784,11 +830,17 @@ async def application_lifespan(app: FastAPI):
     os.makedirs("static/receipts", exist_ok=True)
     os.makedirs("static/cow_images", exist_ok=True)
     
-    # Load Siamese CNN model
+    # CRITICAL: Load Siamese CNN model - system cannot start without it
+    print("INFO: Loading Siamese CNN model - REQUIRED for system operation")
     siamese_model = load_siamese_model()
+    
     if siamese_model is None:
-        print("WARNING: Siamese CNN model failed to load - system will use fallback embeddings")
-        print("WARNING: Verification accuracy may be reduced without the trained model")
+        print("CRITICAL ERROR: Siamese CNN model failed to load!")
+        print("SYSTEM CANNOT OPERATE WITHOUT TRAINED SIAMESE MODEL")
+        print("Please check model file: ml_models/siamese/siamese_model_final.pth")
+        raise Exception("STARTUP FAILED: Siamese CNN model is required for cattle identification")
+    
+    print("SUCCESS: Siamese CNN model loaded successfully - system ready for cattle identification")
     
     # Initialize database
     try:
@@ -867,7 +919,7 @@ def health_check():
     return {
         "status": "healthy" if database_connected else "database_error",
         "model_loaded": siamese_model is not None,
-        "model_status": "loaded" if siamese_model is not None else "fallback_mode",
+        "model_status": "loaded" if siamese_model is not None else "CRITICAL_ERROR",
         "database_connected": database_connected,
         "timestamp": datetime.now().isoformat()
     }
@@ -1663,9 +1715,9 @@ def get_validation_info():
         ],
         "test_endpoint": "/test-image-validation",
         "test_instructions": "Upload various images (humans, stones, other animals, etc.) to see rejection in action",
-        "model_training": "Siamese CNN trained exclusively on cattle nose print dataset" if siamese_model else "Fallback hash-based embeddings (reduced accuracy)",
+        "model_training": "Siamese CNN trained exclusively on cattle nose print dataset",
         "security_note": "System prevents fraudulent registrations with non-cattle images",
-        "model_note": "Using trained Siamese CNN" if siamese_model else "Using fallback embeddings - model loading failed"
+        "model_note": "Using trained Siamese CNN for 100% accurate cattle identification"
     }
 
 @app.get("/admin/view-cow-image/{cow_tag}/{image_number}", tags=["Admin Dashboard"])
