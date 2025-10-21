@@ -1910,6 +1910,97 @@ def debug_database_contents(db: Session = Depends(get_db)):
             "message": "Failed to retrieve database contents"
         }
 
+@app.post("/admin/migrate-database", tags=["Admin Dashboard"])
+def migrate_database_schema(
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Migrate database schema to add missing columns."""
+    try:
+        print(f"INFO: Admin {current_admin.username} running database migration")
+        
+        # Add cow_photo column if it doesn't exist
+        try:
+            db.execute(text("ALTER TABLE cows ADD COLUMN cow_photo BYTEA;"))
+            db.commit()
+            print("SUCCESS: Added cow_photo column to cows table")
+            cow_photo_added = True
+        except Exception as e:
+            if "already exists" in str(e) or "duplicate column" in str(e):
+                print("INFO: cow_photo column already exists")
+                cow_photo_added = False
+            else:
+                print(f"WARNING: Failed to add cow_photo column: {str(e)}")
+                cow_photo_added = False
+        
+        # Test the migration
+        try:
+            test_count = db.query(Cow).count()
+            migration_success = True
+            print(f"SUCCESS: Migration verified - {test_count} cattle records accessible")
+        except Exception as test_error:
+            migration_success = False
+            print(f"ERROR: Migration verification failed: {str(test_error)}")
+        
+        return {
+            "success": migration_success,
+            "message": "✅ Database migration completed" if migration_success else "❌ Migration failed",
+            "changes_made": {
+                "cow_photo_column_added": cow_photo_added
+            },
+            "admin_action": f"Migration by {current_admin.username}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as migration_error:
+        db.rollback()
+        print(f"ERROR: Database migration failed - {str(migration_error)}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(migration_error)}")
+
+@app.post("/migrate-db-schema", tags=["System Status"])
+def migrate_database_schema_public(db: Session = Depends(get_db)):
+    """Public endpoint to migrate database schema (add missing columns)."""
+    try:
+        print("INFO: Running database schema migration")
+        
+        migration_results = []
+        
+        # Add cow_photo column if missing
+        try:
+            db.execute(text("ALTER TABLE cows ADD COLUMN cow_photo BYTEA;"))
+            db.commit()
+            migration_results.append("✅ Added cow_photo column to cows table")
+        except Exception as e:
+            if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                migration_results.append("ℹ️ cow_photo column already exists")
+            else:
+                migration_results.append(f"❌ Failed to add cow_photo: {str(e)}")
+        
+        # Test database access
+        try:
+            cattle_count = db.query(Cow).count()
+            owner_count = db.query(Owner).count()
+            migration_results.append(f"✅ Database accessible: {cattle_count} cattle, {owner_count} owners")
+            success = True
+        except Exception as test_error:
+            migration_results.append(f"❌ Database test failed: {str(test_error)}")
+            success = False
+        
+        return {
+            "success": success,
+            "message": "Database migration completed",
+            "migration_results": migration_results,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as migration_error:
+        return {
+            "success": False,
+            "message": "Migration failed",
+            "error": str(migration_error),
+            "timestamp": datetime.now().isoformat()
+        }
+
 @app.get("/test-email-config", tags=["Testing"])
 def test_email_configuration():
     """Test email configuration and SMTP connectivity."""
