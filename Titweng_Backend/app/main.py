@@ -342,11 +342,11 @@ def extract_nose_print_embedding(image_tensor: torch.Tensor) -> np.ndarray:
             # Quick validation
             embedding_magnitude = np.linalg.norm(embedding_vector)
             
-            # Only check for extreme cases
-            if embedding_magnitude < 0.001 or embedding_magnitude > 50.0:
-                raise ValueError(f"Invalid embedding magnitude: {embedding_magnitude:.3f}")
+            # Your model produces L2 normalized embeddings (magnitude ≈ 1.0)
+            if embedding_magnitude < 0.8 or embedding_magnitude > 1.2:
+                raise ValueError(f"Invalid embedding magnitude: {embedding_magnitude:.3f} (expected ~1.0)")
             
-            # Remove std check - your trained model produces uniform embeddings
+            # Your trained model produces consistent normalized embeddings - no std check needed
             
             return embedding_vector
             
@@ -1180,11 +1180,12 @@ async def verify_cattle(
                 embedding_vector = extract_nose_print_embedding(processed_tensor)
                 
                 embedding_magnitude = np.linalg.norm(embedding_vector)
-                if 0.3 <= embedding_magnitude <= 1.8:
+                # Your trained model produces L2 normalized embeddings (magnitude ≈ 1.0)
+                if 0.8 <= embedding_magnitude <= 1.2:
                     query_embeddings.append(embedding_vector)
                     print(f"SUCCESS: Valid embedding extracted (magnitude: {embedding_magnitude:.3f})")
                 else:
-                    processing_errors.append(f"Invalid embedding magnitude {embedding_magnitude:.3f}")
+                    processing_errors.append(f"Invalid embedding magnitude {embedding_magnitude:.3f} (expected ~1.0 for L2 normalized)")
                 
                 # Clear memory
                 del image_content, image_array, decoded_image, rgb_image, validated_image, processed_tensor
