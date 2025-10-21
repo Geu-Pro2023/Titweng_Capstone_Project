@@ -1539,8 +1539,13 @@ def get_validation_info():
         "security_note": "System prevents fraudulent registrations with non-cattle images"
     }
 
-@app.get("/view-cow-image/{cow_tag}/{image_number}", tags=["Database Images"])
-def view_cow_image_from_database(cow_tag: str, image_number: int, db: Session = Depends(get_db)):
+@app.get("/admin/view-cow-image/{cow_tag}/{image_number}", tags=["Admin Dashboard"])
+def view_cow_image_from_database(
+    cow_tag: str, 
+    image_number: int, 
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
     """View nose print images stored in database during registration."""
     try:
         # Find the cattle by tag
@@ -1569,8 +1574,11 @@ def view_cow_image_from_database(cow_tag: str, image_number: int, db: Session = 
         print(f"ERROR: Failed to retrieve image - {str(error)}")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve image: {str(error)}")
 
-@app.get("/list-database-images", tags=["Database Images"])
-def list_all_database_images(db: Session = Depends(get_db)):
+@app.get("/admin/list-database-images", tags=["Admin Dashboard"])
+def list_all_database_images(
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
     """List all nose print images stored in database."""
     try:
         # Get all cattle with their embeddings
@@ -1590,7 +1598,7 @@ def list_all_database_images(db: Session = Depends(get_db)):
                         "image_filename": embedding.image_path,
                         "owner_name": owner_name,
                         "registration_date": cattle.registration_date.strftime('%d/%m/%Y %H:%M') if cattle.registration_date else "Unknown",
-                        "view_url": f"/view-cow-image/{cattle.cow_tag}/{idx + 1}",
+                        "view_url": f"/admin/view-cow-image/{cattle.cow_tag}/{idx + 1}",
                         "image_size_bytes": len(embedding.image_data)
                     })
                     total_images += 1
@@ -1600,15 +1608,20 @@ def list_all_database_images(db: Session = Depends(get_db)):
             "total_images_in_database": total_images,
             "images": image_list,
             "note": "These images are stored as binary data in PostgreSQL database",
-            "usage": "Visit /view-cow-image/{cow_tag}/{image_number} to see individual images"
+            "usage": "Admin-only access: View or download cattle nose print images from database",
+            "authentication": "Requires valid admin JWT token",
+            "security_note": "Only authenticated administrators can access cattle images"
         }
         
     except Exception as error:
         print(f"ERROR: Failed to list images - {str(error)}")
         raise HTTPException(status_code=500, detail=f"Failed to list images: {str(error)}")
 
-@app.get("/database-stats", tags=["Database Images"])
-def get_database_statistics(db: Session = Depends(get_db)):
+@app.get("/admin/database-stats", tags=["Admin Dashboard"])
+def get_database_statistics(
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
     """Get statistics about images and data stored in database."""
     try:
         # Count cattle and images
@@ -1636,15 +1649,56 @@ def get_database_statistics(db: Session = Depends(get_db)):
                 "database_location": "Render PostgreSQL Cloud Database"
             },
             "endpoints": {
-                "list_all_images": "/list-database-images",
-                "view_specific_image": "/view-cow-image/{cow_tag}/{image_number}",
-                "example_usage": "/view-cow-image/TWDX0004/1"
+                "list_all_images": "/admin/list-database-images",
+                "view_specific_image": "/admin/view-cow-image/{cow_tag}/{image_number}",
+                "download_image": "/admin/download-cow-image/{cow_tag}/{image_number}",
+                "example_usage": "/admin/view-cow-image/TWDX0004/1"
             }
         }
         
     except Exception as error:
         print(f"ERROR: Failed to get database stats - {str(error)}")
         raise HTTPException(status_code=500, detail=f"Failed to get database stats: {str(error)}")
+
+@app.get("/admin/download-cow-image/{cow_tag}/{image_number}", tags=["Admin Dashboard"])
+def download_cow_image_from_database(
+    cow_tag: str, 
+    image_number: int, 
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Download nose print image from database (Admin only)."""
+    try:
+        print(f"INFO: Admin {current_admin.username} downloading image {cow_tag}/{image_number}")
+        
+        # Find the cattle by tag
+        cattle = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
+        if not cattle:
+            raise HTTPException(status_code=404, detail=f"Cattle with tag {cow_tag} not found")
+        
+        # Find the specific image by number
+        if image_number < 1 or image_number > len(cattle.embeddings):
+            raise HTTPException(status_code=404, detail=f"Image {image_number} not found for cattle {cow_tag}")
+        
+        # Get the embedding record
+        embedding_record = cattle.embeddings[image_number - 1]
+        
+        if not embedding_record.image_data:
+            raise HTTPException(status_code=404, detail=f"Image data not found for {cow_tag} image {image_number}")
+        
+        # Return image as downloadable file
+        return Response(
+            content=embedding_record.image_data,
+            media_type="image/jpeg",
+            headers={
+                "Content-Disposition": f"attachment; filename={cow_tag}_nose_print_{image_number}.jpg",
+                "Content-Description": f"Cattle {cow_tag} Nose Print Image {image_number}"
+            }
+        )
+        
+    except Exception as error:
+        print(f"ERROR: Failed to download image - {str(error)}")
+        raise HTTPException(status_code=500, detail=f"Failed to download image: {str(error)}")
 
 if __name__ == "__main__":
     import uvicorn
