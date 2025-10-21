@@ -1,13 +1,11 @@
 // Security Configuration
 const AUTH_CONFIG = {
     API_BASE_URL: window.location.hostname === 'localhost' 
-        ? 'http://localhost:8000/api'
-        : 'https://your-render-backend-url.onrender.com/api',
+        ? 'http://localhost:8000'
+        : 'https://titweng-capstone-project.onrender.com',
     TOKEN_KEY: 'titweng_admin_token',
     SESSION_TIMEOUT: 30 * 60 * 1000 // 30 minutes
 };
-
-// Replace 'your-render-backend-url' with your actual Render backend URL
 
 // Check authentication on page load
 document.addEventListener('DOMContentLoaded', function() {
