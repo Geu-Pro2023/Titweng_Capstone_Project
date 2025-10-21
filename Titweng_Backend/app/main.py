@@ -449,10 +449,11 @@ def send_email_with_receipt(owner_email: str, owner_name: str, cow_tag: str, pdf
         # Check if email configuration is available
         if not all([smtp_server, smtp_username, smtp_password]):
             print("❌ WARNING: Email configuration missing - email notifications disabled")
-            print(f"   SMTP Server: {smtp_server}")
-            print(f"   SMTP Username: {smtp_username}")
-            print(f"   SMTP Password: {'Present' if smtp_password else 'Missing'}")
-            return False
+            print(f"   SMTP Server: {smtp_server or 'MISSING'}")
+            print(f"   SMTP Username: {smtp_username or 'MISSING'}")
+            print(f"   SMTP Password: {'Present' if smtp_password else 'MISSING'}")
+            print(f"   SMTP Port: {smtp_port}")
+            raise Exception(f"Email configuration incomplete: Server={smtp_server}, Username={smtp_username}, Password={'Present' if smtp_password else 'Missing'}")
         
         print(f"📧 INFO: Sending registration email to {owner_email} using {smtp_username}")
         print(f"📧 Subject: Cattle Registration Confirmation - {cow_tag}")
@@ -495,18 +496,29 @@ Titweng Cattle Recognition System
         
         # Send email via SMTP with timeout and retry
         try:
+            print(f"INFO: Connecting to SMTP server {smtp_server}:{smtp_port}")
             with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
+                print("INFO: Starting TLS encryption")
                 server.starttls()  # Enable encryption
+                print(f"INFO: Logging in with username: {smtp_username}")
                 server.login(smtp_username, smtp_password)
                 email_text = email_message.as_string()
+                print(f"INFO: Sending email from {smtp_username} to {owner_email}")
                 server.sendmail(smtp_username, owner_email, email_text)
+                print("SUCCESS: Email sent via primary SMTP")
         except Exception as smtp_error:
-            print(f"SMTP Error: {str(smtp_error)}")
-            # Try alternative SMTP settings
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as server:
-                server.login(smtp_username, smtp_password)
-                email_text = email_message.as_string()
-                server.sendmail(smtp_username, owner_email, email_text)
+            print(f"Primary SMTP Error: {str(smtp_error)}")
+            print("INFO: Trying alternative Gmail SMTP SSL connection")
+            try:
+                with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as server:
+                    print(f"INFO: SSL login with {smtp_username}")
+                    server.login(smtp_username, smtp_password)
+                    email_text = email_message.as_string()
+                    server.sendmail(smtp_username, owner_email, email_text)
+                    print("SUCCESS: Email sent via Gmail SSL fallback")
+            except Exception as ssl_error:
+                print(f"Gmail SSL Error: {str(ssl_error)}")
+                raise Exception(f"Both SMTP methods failed: Primary={str(smtp_error)}, SSL={str(ssl_error)}")
         
         print(f"✅ SUCCESS: Registration email with PDF receipt sent to {owner_email}")
         return True
@@ -934,6 +946,7 @@ async def register_cattle(
     color: str = Form(None),
     age: str = Form(None),
     files: List[UploadFile] = File(...),
+    cow_photo: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     """Register new cattle with nose print images."""
@@ -1068,13 +1081,46 @@ async def register_cattle(
         
         print(f"SUCCESS: Generated {len(processed_embeddings)} embeddings for cattle registration")
         
+        # Process cow photo for physical verification
+        cow_photo_bytes = None
+        try:
+            if cow_photo and cow_photo.filename:
+                photo_content = await cow_photo.read()
+                # Validate it's an image
+                photo_array = np.frombuffer(photo_content, np.uint8)
+                decoded_photo = cv2.imdecode(photo_array, cv2.IMREAD_COLOR)
+                
+                if decoded_photo is not None:
+                    # Resize photo to reasonable size (max 800px)
+                    height, width = decoded_photo.shape[:2]
+                    if height > 800 or width > 800:
+                        scale = min(800/height, 800/width)
+                        new_height, new_width = int(height*scale), int(width*scale)
+                        decoded_photo = cv2.resize(decoded_photo, (new_width, new_height))
+                    
+                    # Convert back to bytes
+                    _, photo_buffer = cv2.imencode('.jpg', decoded_photo, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                    cow_photo_bytes = photo_buffer.tobytes()
+                    print(f"SUCCESS: Processed cow photo ({len(cow_photo_bytes)} bytes)")
+                else:
+                    print("WARNING: Could not decode cow photo")
+        except Exception as photo_error:
+            print(f"WARNING: Cow photo processing failed - {str(photo_error)}")
+        
+        # Generate QR code link
+        registration_date = datetime.now().strftime('%Y%m%d')
+        qr_data = f"COW:{cattle_tag}|OWNER:{owner_name}|DATE:{registration_date}"
+        qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={qr_data}"
+        
         # Create cattle record
         new_cattle = Cow(
             cow_tag=cattle_tag,
             breed=breed,
             color=color,
             age=cattle_age,
-            owner_id=owner.owner_id
+            owner_id=owner.owner_id,
+            qr_code_link=qr_code_url,
+            cow_photo=cow_photo_bytes
         )
         db.add(new_cattle)
         db.flush()  # Get the cattle ID
@@ -1143,15 +1189,20 @@ async def register_cattle(
             
             # Send email with receipt automatically
             email_sent = False
+            email_error_details = None
             try:
                 print(f"INFO: Attempting to send email to {owner_email}")
+                print(f"INFO: Using SMTP server: {os.getenv('SMTP_SERVER')}")
+                print(f"INFO: Using SMTP username: {os.getenv('SMTP_USERNAME')}")
                 email_sent = send_email_with_receipt(owner_email, owner_name, cattle_tag, pdf_receipt)
                 if email_sent:
                     print(f"✅ SUCCESS: Registration email with receipt sent to {owner_email}")
                 else:
                     print(f"❌ WARNING: Email failed to send to {owner_email}")
+                    email_error_details = "Email function returned False - check SMTP configuration"
             except Exception as email_error:
-                print(f"❌ ERROR: Email sending failed - {str(email_error)}")
+                email_error_details = str(email_error)
+                print(f"❌ ERROR: Email sending failed - {email_error_details}")
                 # Don't fail registration if email fails
                 email_sent = False
             
@@ -1161,7 +1212,10 @@ async def register_cattle(
             if email_sent:
                 notification_status.append("Email sent")
             
-            notifications = ", ".join(notification_status) if notification_status else "Email notifications may be disabled - check SMTP configuration"
+            if email_error_details:
+                notifications = f"Email failed: {email_error_details}"
+            else:
+                notifications = ", ".join(notification_status) if notification_status else "Email notifications may be disabled - check SMTP configuration"
             
         except Exception as notification_error:
             print(f"WARNING: Notification error - {str(notification_error)}")
@@ -1171,6 +1225,7 @@ async def register_cattle(
             "success": True,
             "cattle_id": new_cattle.cow_id,
             "cattle_tag": cattle_tag,
+            "qr_code_link": qr_code_url,
             "receipt_path": receipt_path,
             "embeddings_count": len(processed_embeddings),
             "embeddings_saved_to_db": saved_embeddings_count,
@@ -1459,7 +1514,9 @@ async def verify_cattle(
                     "cattle_id": best_match_cattle.cow_id,
                     "breed": best_match_cattle.breed or "Not specified",
                     "color": best_match_cattle.color or "Not specified",
-                    "age": f"{best_match_cattle.age} months" if best_match_cattle.age else "Not specified"
+                    "age": f"{best_match_cattle.age} months" if best_match_cattle.age else "Not specified",
+                    "has_photo": best_match_cattle.cow_photo is not None,
+                    "photo_url": f"/view-cow-photo/{best_match_cattle.cow_tag}" if best_match_cattle.cow_photo else None
                 },
                 "owner_details": {
                     "owner_name": owner.full_name if owner else "Unknown",
@@ -1473,6 +1530,10 @@ async def verify_cattle(
                     "verification_method": "ULTRA_ROBUST",
                     "verification_layers": verification_details,
                     "robustness_level": "100% - No cow mixing possible"
+                },
+                "physical_verification": {
+                    "instruction": "Compare the verified cow with the photo below for physical confirmation",
+                    "photo_available": best_match_cattle.cow_photo is not None
                 }
             }
         else:
@@ -1536,7 +1597,10 @@ def get_all_registered_cattle(db: Session = Depends(get_db)):
             "owner_email": owner.email if owner else "Unknown",
             "owner_phone": owner.phone if owner else "Unknown",
             "owner_address": owner.address if owner else "Unknown",
-            "embeddings_count": len(cattle.embeddings)
+            "embeddings_count": len(cattle.embeddings),
+            "qr_code_link": cattle.qr_code_link,
+            "has_photo": cattle.cow_photo is not None,
+            "photo_url": f"/view-cow-photo/{cattle.cow_tag}" if cattle.cow_photo else None
         })
     
     return {
@@ -1846,6 +1910,59 @@ def debug_database_contents(db: Session = Depends(get_db)):
             "message": "Failed to retrieve database contents"
         }
 
+@app.get("/test-email-config", tags=["Testing"])
+def test_email_configuration():
+    """Test email configuration and SMTP connectivity."""
+    try:
+        import smtplib
+        
+        smtp_server = os.getenv("SMTP_SERVER")
+        smtp_port = int(os.getenv("SMTP_PORT", 587))
+        smtp_username = os.getenv("SMTP_USERNAME")
+        smtp_password = os.getenv("SMTP_PASSWORD")
+        
+        config_status = {
+            "smtp_server": smtp_server or "MISSING",
+            "smtp_port": smtp_port,
+            "smtp_username": smtp_username or "MISSING",
+            "smtp_password": "Present" if smtp_password else "MISSING",
+            "configuration_complete": all([smtp_server, smtp_username, smtp_password])
+        }
+        
+        if not config_status["configuration_complete"]:
+            return {
+                "status": "CONFIGURATION_INCOMPLETE",
+                "config": config_status,
+                "message": "Email configuration is missing required fields"
+            }
+        
+        # Test SMTP connection
+        try:
+            print(f"Testing SMTP connection to {smtp_server}:{smtp_port}")
+            with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+                server.starttls()
+                server.login(smtp_username, smtp_password)
+                connection_test = "SUCCESS"
+                connection_error = None
+        except Exception as conn_error:
+            connection_test = "FAILED"
+            connection_error = str(conn_error)
+        
+        return {
+            "status": "TESTED",
+            "config": config_status,
+            "connection_test": connection_test,
+            "connection_error": connection_error,
+            "message": "Email configuration test completed"
+        }
+        
+    except Exception as test_error:
+        return {
+            "status": "ERROR",
+            "error": str(test_error),
+            "message": "Failed to test email configuration"
+        }
+
 @app.get("/debug/test-specific-cow/{cow_tag}", tags=["Testing"])
 def debug_test_specific_cow(cow_tag: str, db: Session = Depends(get_db)):
     """DEBUG ENDPOINT: Test verification against a specific registered cow."""
@@ -1959,6 +2076,166 @@ def list_all_database_images(
         print(f"ERROR: Failed to list images - {str(error)}")
         raise HTTPException(status_code=500, detail=f"Failed to list images: {str(error)}")
 
+@app.delete("/admin/clear-all-data", tags=["Admin Dashboard"])
+def clear_all_database_data(
+    confirm: str = "DELETE_ALL_DATA",
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """DANGER: Clear all cattle data from database (Admin only)."""
+    try:
+        if confirm != "DELETE_ALL_DATA":
+            raise HTTPException(
+                status_code=400, 
+                detail="Must provide confirm='DELETE_ALL_DATA' to proceed"
+            )
+        
+        print(f"WARNING: Admin {current_admin.username} is clearing ALL database data")
+        
+        # Count records before deletion
+        cattle_count = db.query(Cow).count()
+        embedding_count = db.query(Embedding).count()
+        owner_count = db.query(Owner).count()
+        verification_count = db.query(VerificationLog).count()
+        
+        # Delete in correct order (foreign key constraints)
+        db.query(VerificationLog).delete()
+        db.query(Embedding).delete()
+        db.query(Cow).delete()
+        db.query(Owner).delete()
+        
+        db.commit()
+        
+        print(f"SUCCESS: Cleared {cattle_count} cattle, {embedding_count} embeddings, {owner_count} owners, {verification_count} logs")
+        
+        return {
+            "success": True,
+            "message": "✅ ALL DATA CLEARED - Database is now empty",
+            "deleted_records": {
+                "cattle": cattle_count,
+                "embeddings": embedding_count,
+                "owners": owner_count,
+                "verification_logs": verification_count
+            },
+            "admin_action": f"Performed by {current_admin.username}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as clear_error:
+        db.rollback()
+        print(f"ERROR: Failed to clear database - {str(clear_error)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear data: {str(clear_error)}")
+
+@app.delete("/admin/delete-cow/{cow_tag}", tags=["Admin Dashboard"])
+def delete_cattle_record(
+    cow_tag: str,
+    reason: str = "deceased",
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Delete cattle record (e.g., when deceased)."""
+    try:
+        # Find the cattle
+        cattle = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
+        if not cattle:
+            raise HTTPException(status_code=404, detail=f"Cattle {cow_tag} not found")
+        
+        owner_name = cattle.owner.full_name if cattle.owner else "Unknown"
+        embeddings_count = len(cattle.embeddings)
+        
+        # Delete cattle (cascades to embeddings)
+        db.delete(cattle)
+        db.commit()
+        
+        print(f"INFO: Admin {current_admin.username} deleted cattle {cow_tag} - Reason: {reason}")
+        
+        return {
+            "success": True,
+            "message": f"✅ Cattle {cow_tag} deleted from system",
+            "deleted_cattle": {
+                "cow_tag": cow_tag,
+                "owner_name": owner_name,
+                "embeddings_deleted": embeddings_count
+            },
+            "reason": reason,
+            "admin_action": f"Deleted by {current_admin.username}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as delete_error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete cattle: {str(delete_error)}")
+
+@app.put("/admin/transfer-ownership/{cow_tag}", tags=["Admin Dashboard"])
+def transfer_cattle_ownership(
+    cow_tag: str,
+    new_owner_name: str,
+    new_owner_email: str,
+    new_owner_phone: str = None,
+    new_owner_address: str = None,
+    new_owner_national_id: str = None,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Transfer cattle ownership (e.g., when sold)."""
+    try:
+        # Find the cattle
+        cattle = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
+        if not cattle:
+            raise HTTPException(status_code=404, detail=f"Cattle {cow_tag} not found")
+        
+        old_owner = cattle.owner
+        old_owner_name = old_owner.full_name if old_owner else "Unknown"
+        
+        # Check if new owner already exists
+        existing_owner = db.query(Owner).filter(
+            Owner.full_name == new_owner_name,
+            Owner.email == new_owner_email
+        ).first()
+        
+        if existing_owner:
+            new_owner = existing_owner
+            print(f"INFO: Using existing owner: {new_owner_name}")
+        else:
+            # Create new owner
+            new_owner = Owner(
+                full_name=new_owner_name,
+                email=new_owner_email,
+                phone=new_owner_phone,
+                address=new_owner_address,
+                national_id=new_owner_national_id
+            )
+            db.add(new_owner)
+            db.flush()
+            print(f"INFO: Created new owner: {new_owner_name}")
+        
+        # Transfer ownership
+        cattle.owner_id = new_owner.owner_id
+        db.commit()
+        
+        print(f"INFO: Admin {current_admin.username} transferred {cow_tag} from {old_owner_name} to {new_owner_name}")
+        
+        return {
+            "success": True,
+            "message": f"✅ Cattle {cow_tag} ownership transferred successfully",
+            "transfer_details": {
+                "cow_tag": cow_tag,
+                "previous_owner": old_owner_name,
+                "new_owner": new_owner_name,
+                "new_owner_email": new_owner_email
+            },
+            "admin_action": f"Transferred by {current_admin.username}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as transfer_error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to transfer ownership: {str(transfer_error)}")
+
 @app.get("/admin/database-stats", tags=["Admin Dashboard"])
 def get_database_statistics(
     db: Session = Depends(get_db),
@@ -2001,6 +2278,30 @@ def get_database_statistics(
     except Exception as error:
         print(f"ERROR: Failed to get database stats - {str(error)}")
         raise HTTPException(status_code=500, detail=f"Failed to get database stats: {str(error)}")
+
+@app.get("/view-cow-photo/{cow_tag}", tags=["Cattle Management"])
+def view_cow_photo(cow_tag: str, db: Session = Depends(get_db)):
+    """View full cow photo for physical verification."""
+    try:
+        # Find the cattle
+        cattle = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
+        if not cattle:
+            raise HTTPException(status_code=404, detail=f"Cattle {cow_tag} not found")
+        
+        if not cattle.cow_photo:
+            raise HTTPException(status_code=404, detail=f"No photo available for cattle {cow_tag}")
+        
+        # Return the photo
+        return Response(
+            content=cattle.cow_photo,
+            media_type="image/jpeg",
+            headers={"Content-Disposition": f"inline; filename={cow_tag}_photo.jpg"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve photo: {str(error)}")
 
 @app.get("/admin/download-cow-image/{cow_tag}/{image_number}", tags=["Admin Dashboard"])
 def download_cow_image_from_database(

@@ -74,6 +74,7 @@ class Cow(Base):
     owner_id = Column(Integer, ForeignKey("owners.owner_id", ondelete="CASCADE"))
     qr_code_link = Column(Text)  # QR code URL for verification
     receipt_pdf_link = Column(Text)  # Path to registration receipt
+    cow_photo = Column(LargeBinary)  # Full cow image for physical verification
     
     # Relationships
     owner = relationship("Owner", back_populates="cows")
