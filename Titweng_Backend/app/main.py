@@ -756,6 +756,7 @@ async def application_lifespan(app: FastAPI):
     # Initialize database
     try:
         from app.database import Base, engine
+        from app.auth import Admin  # Import Admin model
         
         # Create pgvector extension for embedding storage
         with engine.connect() as connection:
@@ -763,7 +764,7 @@ async def application_lifespan(app: FastAPI):
             connection.commit()
             print("SUCCESS: pgvector extension created/verified")
         
-        # Create all database tables
+        # Create all database tables including Admin table
         Base.metadata.create_all(bind=engine)
         print("SUCCESS: Database tables created successfully")
         
@@ -1078,7 +1079,16 @@ async def register_cattle(
             )
             db.add(embedding_record)
         
+        # Commit and refresh to ensure data is saved
         db.commit()
+        db.refresh(new_cattle)
+        
+        # Verify embeddings were saved
+        saved_embeddings_count = db.query(Embedding).filter(Embedding.cow_id == new_cattle.cow_id).count()
+        print(f"DEBUG: Saved {saved_embeddings_count} embeddings for cattle {cattle_tag}")
+        
+        if saved_embeddings_count != len(processed_embeddings):
+            print(f"WARNING: Expected {len(processed_embeddings)} embeddings but saved {saved_embeddings_count}")
         
         # Generate PDF receipt
         cattle_data = {
@@ -1103,6 +1113,13 @@ async def register_cattle(
         # Update cattle record with receipt path
         new_cattle.receipt_pdf_link = receipt_path
         db.commit()
+        
+        # Final verification that cattle is properly saved with embeddings
+        final_cattle_check = db.query(Cow).filter(Cow.cow_tag == cattle_tag).first()
+        if final_cattle_check and final_cattle_check.embeddings:
+            print(f"SUCCESS: Cattle {cattle_tag} registered with {len(final_cattle_check.embeddings)} embeddings")
+        else:
+            print(f"ERROR: Cattle {cattle_tag} registration verification failed - no embeddings found")
         
         # Send notifications
         try:
@@ -1142,8 +1159,13 @@ async def register_cattle(
             "cattle_tag": cattle_tag,
             "receipt_path": receipt_path,
             "embeddings_count": len(processed_embeddings),
+            "embeddings_saved_to_db": saved_embeddings_count,
             "message": f"Cattle registered successfully with tag {cattle_tag}",
-            "notifications": notifications
+            "notifications": notifications,
+            "debug_endpoints": {
+                "check_database": "/debug/database-contents",
+                "test_this_cow": f"/debug/test-specific-cow/{cattle_tag}"
+            }
         }
         
     except HTTPException:
@@ -1245,8 +1267,9 @@ async def verify_cattle(
             average_query_embedding = np.mean(query_embeddings, axis=0)
             normalized_query_embedding = average_query_embedding / np.linalg.norm(average_query_embedding)
         
-        # Memory-optimized comparison - process cattle in batches
-        cattle_count = db.query(Cow).filter(Cow.embeddings.any()).count()
+        # Get all cattle with embeddings
+        all_cattle_with_embeddings = db.query(Cow).filter(Cow.embeddings.any()).all()
+        cattle_count = len(all_cattle_with_embeddings)
         
         if cattle_count == 0:
             return {
@@ -1255,68 +1278,62 @@ async def verify_cattle(
                 "message": "❌ COW NOT REGISTERED - No cattle in database"
             }
         
-        print(f"INFO: Comparing against {cattle_count} registered cattle (memory-optimized)")
+        print(f"INFO: Comparing against {cattle_count} registered cattle")
         
-        # Process cattle in small batches to avoid memory issues
-        BATCH_SIZE = 10  # Process 10 cattle at a time
         cattle_similarity_scores = []
         total_comparisons = 0
         
-        for offset in range(0, cattle_count, BATCH_SIZE):
-            # Load batch of cattle
-            cattle_batch = db.query(Cow).filter(Cow.embeddings.any()).offset(offset).limit(BATCH_SIZE).all()
+        # Process all cattle with embeddings
+        for cattle in all_cattle_with_embeddings:
+            if not cattle.embeddings:
+                continue
             
-            for cattle in cattle_batch:
-                if not cattle.embeddings:
-                    continue
-                
-                similarity_scores = []
-                
-                # Process up to 5 embeddings per cattle for better accuracy
-                for embedding_idx, stored_embedding in enumerate(cattle.embeddings[:5]):
-                    try:
-                        if not stored_embedding.embedding:
-                            continue
-                        
-                        stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
-                        
-                        if stored_vector.size != 256:
-                            continue
-                        
-                        stored_magnitude = np.linalg.norm(stored_vector)
-                        if stored_magnitude == 0:
-                            continue
-                        
-                        normalized_stored_vector = stored_vector / stored_magnitude
-                        cosine_similarity = np.dot(normalized_query_embedding, normalized_stored_vector)
-                        cosine_similarity = np.clip(cosine_similarity, -1.0, 1.0)
-                        
-                        similarity_scores.append(cosine_similarity)
-                        total_comparisons += 1
-                        
-                    except Exception:
+            similarity_scores = []
+            
+            # Process up to 5 embeddings per cattle
+            for stored_embedding in cattle.embeddings[:5]:
+                try:
+                    if not stored_embedding.embedding:
                         continue
-                
-                if similarity_scores:
-                    average_similarity = np.mean(similarity_scores)
-                    cattle_similarity_scores.append((cattle, average_similarity))
+                    
+                    # Convert embedding to numpy array
+                    if isinstance(stored_embedding.embedding, list):
+                        stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
+                    else:
+                        stored_vector = np.array(stored_embedding.embedding, dtype=np.float32)
+                    
+                    if stored_vector.size != 256:
+                        continue
+                    
+                    stored_magnitude = np.linalg.norm(stored_vector)
+                    if stored_magnitude == 0:
+                        continue
+                    
+                    normalized_stored_vector = stored_vector / stored_magnitude
+                    cosine_similarity = float(np.dot(normalized_query_embedding, normalized_stored_vector))
+                    cosine_similarity = np.clip(cosine_similarity, -1.0, 1.0)
+                    
+                    similarity_scores.append(cosine_similarity)
+                    total_comparisons += 1
+                    
+                except Exception as e:
+                    print(f"WARNING: Error processing embedding for {cattle.cow_tag}: {str(e)}")
+                    continue
             
-            # Clear batch from memory
-            del cattle_batch
+            if similarity_scores:
+                average_similarity = float(np.mean(similarity_scores))
+                cattle_similarity_scores.append((cattle, average_similarity))
+                print(f"INFO: Cattle {cattle.cow_tag} average similarity: {average_similarity:.4f}")
         
         print(f"INFO: Completed {total_comparisons} comparisons (memory-optimized)")
         
-        # Force garbage collection to free memory
-        gc.collect()
-        
-        final_memory = get_memory_usage()
-        print(f"INFO: Verification completed (Memory: {final_memory}MB)")
+        print(f"INFO: Completed {total_comparisons} embedding comparisons")
         
         if not cattle_similarity_scores:
             return {
                 "registered": False,
-                "status": "NOT_REGISTERED",
-                "message": "❌ COW NOT REGISTERED - No valid comparisons could be made"
+                "status": "NOT_REGISTERED", 
+                "message": f"❌ COW NOT REGISTERED - No valid comparisons from {cattle_count} cattle, {total_comparisons} embeddings processed"
             }
         
         # Find best match
@@ -1780,6 +1797,81 @@ def get_validation_info():
         },
         "guarantee": "100% robust - Will reject uncertain matches to prevent cow mixing"
     }
+
+@app.get("/debug/database-contents", tags=["Testing"])
+def debug_database_contents(db: Session = Depends(get_db)):
+    """DEBUG ENDPOINT: Check what's actually in the database."""
+    try:
+        # Get all cattle
+        all_cattle = db.query(Cow).all()
+        
+        cattle_info = []
+        for cattle in all_cattle:
+            embeddings_info = []
+            for idx, emb in enumerate(cattle.embeddings):
+                embeddings_info.append({
+                    "embedding_id": emb.embedding_id,
+                    "has_embedding_vector": emb.embedding is not None,
+                    "embedding_length": len(emb.embedding) if emb.embedding else 0,
+                    "has_image_data": emb.image_data is not None,
+                    "image_size_bytes": len(emb.image_data) if emb.image_data else 0
+                })
+            
+            cattle_info.append({
+                "cow_id": cattle.cow_id,
+                "cow_tag": cattle.cow_tag,
+                "owner_name": cattle.owner.full_name if cattle.owner else "No owner",
+                "registration_date": cattle.registration_date.isoformat() if cattle.registration_date else None,
+                "embeddings_count": len(cattle.embeddings),
+                "embeddings_details": embeddings_info
+            })
+        
+        return {
+            "total_cattle_in_db": len(all_cattle),
+            "cattle_details": cattle_info,
+            "debug_note": "This shows exactly what's stored in the database"
+        }
+        
+    except Exception as debug_error:
+        return {
+            "error": str(debug_error),
+            "message": "Failed to retrieve database contents"
+        }
+
+@app.get("/debug/test-specific-cow/{cow_tag}", tags=["Testing"])
+def debug_test_specific_cow(cow_tag: str, db: Session = Depends(get_db)):
+    """DEBUG ENDPOINT: Test verification against a specific registered cow."""
+    try:
+        # Find the cattle
+        cattle = db.query(Cow).filter(Cow.cow_tag == cow_tag).first()
+        if not cattle:
+            return {"error": f"Cattle {cow_tag} not found"}
+        
+        # Check embeddings
+        embeddings_info = []
+        for idx, emb in enumerate(cattle.embeddings):
+            if emb.embedding:
+                emb_array = np.array(emb.embedding, dtype=np.float32)
+                embeddings_info.append({
+                    "embedding_index": idx,
+                    "embedding_length": len(emb.embedding),
+                    "embedding_magnitude": float(np.linalg.norm(emb_array)),
+                    "embedding_mean": float(np.mean(emb_array)),
+                    "embedding_std": float(np.std(emb_array)),
+                    "first_5_values": emb_array[:5].tolist()
+                })
+        
+        return {
+            "cow_tag": cow_tag,
+            "cow_id": cattle.cow_id,
+            "owner_name": cattle.owner.full_name if cattle.owner else "No owner",
+            "total_embeddings": len(cattle.embeddings),
+            "embeddings_analysis": embeddings_info,
+            "can_be_found_by_query": db.query(Cow).filter(Cow.embeddings.any()).filter(Cow.cow_tag == cow_tag).first() is not None
+        }
+        
+    except Exception as debug_error:
+        return {"error": str(debug_error)}
 
 @app.get("/admin/view-cow-image/{cow_tag}/{image_number}", tags=["Admin Dashboard"])
 def view_cow_image_from_database(
