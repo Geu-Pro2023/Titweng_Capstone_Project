@@ -6,7 +6,7 @@ This is the core backend API for the Titweng cattle identification system.
 It provides endpoints for cattle registration, verification using Siamese CNN,
 and administrative functions for managing the cattle database.
 
-Author: Geu Augustine
+Author: Geu Aguto Garang
 Project: Capstone Project - Cattle Identification System
 Technology Stack: FastAPI, PostgreSQL, PyTorch, Siamese CNN
 """
@@ -84,7 +84,7 @@ class SiameseNetwork(torch.nn.Module):
     """
     
     def __init__(self, embedding_dim=256):
-        super(SiameseNetwork, self).__init__()
+        super().__init__()
         
         # Use ResNet-18 as backbone feature extractor
         # Remove the final classification layer to get feature maps
