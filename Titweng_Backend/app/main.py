@@ -1384,7 +1384,9 @@ async def verify_cattle(
                     continue
             
             if similarity_scores:
-                average_similarity = float(np.mean(similarity_scores))
+                # Ensure all similarity scores are scalars
+                scalar_scores = [float(score) for score in similarity_scores]
+                average_similarity = float(np.mean(scalar_scores))
                 cattle_similarity_scores.append((cattle, average_similarity))
                 print(f"INFO: Cattle {cattle.cow_tag} average similarity: {average_similarity:.4f}")
         
@@ -1412,6 +1414,9 @@ async def verify_cattle(
         confidence_level = "REJECTED"
         verification_details = []
         
+        # Ensure best_similarity_score is a scalar float
+        best_similarity_score = float(best_similarity_score)
+        
         # LAYER 1: Ultra-high similarity threshold
         if best_similarity_score >= ULTRA_HIGH_THRESHOLD:
             verification_details.append(f"✅ Ultra-high similarity: {best_similarity_score:.4f} >= {ULTRA_HIGH_THRESHOLD}")
@@ -1436,7 +1441,7 @@ async def verify_cattle(
                                 stored_magnitude = np.linalg.norm(stored_vector)
                                 if stored_magnitude > 0:
                                     normalized_stored = stored_vector / stored_magnitude
-                                    individual_similarity = np.dot(normalized_query_embedding, normalized_stored)
+                                    individual_similarity = float(np.dot(normalized_query_embedding, normalized_stored))
                                     if individual_similarity >= 0.88:  # High individual threshold
                                         high_similarity_count += 1
                     
@@ -1484,7 +1489,7 @@ async def verify_cattle(
                             if stored_vec.size == 256 and np.linalg.norm(stored_vec) > 0:
                                 norm_stored = stored_vec / np.linalg.norm(stored_vec)
                                 norm_query = q_emb / np.linalg.norm(q_emb)
-                                cross_score = np.dot(norm_query, norm_stored)
+                                cross_score = float(np.dot(norm_query, norm_stored))
                                 cross_verification_scores.append(cross_score)
                 
                 if cross_verification_scores:
